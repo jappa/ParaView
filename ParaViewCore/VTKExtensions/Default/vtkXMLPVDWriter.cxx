@@ -28,6 +28,7 @@
 #include "vtkStreamingDemandDrivenPipeline.h"
 #include "vtkStructuredGrid.h"
 #include "vtkUnstructuredGrid.h"
+#include "vtkXMLHyperTreeGridWriter.h"
 #include "vtkXMLImageDataWriter.h"
 #include "vtkXMLPDataWriter.h"
 #include "vtkXMLPImageDataWriter.h"
@@ -356,7 +357,7 @@ void vtkXMLPVDWriter::MakeDirectory(const char* name)
   if (!vtksys::SystemTools::MakeDirectory(name))
   {
     vtkErrorMacro(<< "Sorry unable to create directory: " << name << endl
-                  << "Last systen error was: "
+                  << "Last system error was: "
                   << vtksys::SystemTools::GetLastSystemError().c_str());
   }
 }
@@ -367,7 +368,7 @@ void vtkXMLPVDWriter::RemoveADirectory(const char* name)
   if (!vtksys::SystemTools::RemoveADirectory(name))
   {
     vtkErrorMacro(<< "Sorry unable to remove a directory: " << name << endl
-                  << "Last systen error was: "
+                  << "Last system error was: "
                   << vtksys::SystemTools::GetLastSystemError().c_str());
   }
 }
@@ -539,6 +540,16 @@ void vtkXMLPVDWriter::CreateWriters()
             this->Internal->Writers[i] = w;
             w->Delete();
           }
+        }
+        break;
+
+      case VTK_HYPER_TREE_GRID:
+        if (!this->Internal->Writers[i].GetPointer() ||
+          (this->Internal->Writers[i]->IsA("vtkXMLHyperTreeGridWriter")))
+        {
+          vtkXMLHyperTreeGridWriter* w = vtkXMLHyperTreeGridWriter::New();
+          this->Internal->Writers[i] = w;
+          w->Delete();
         }
         break;
 

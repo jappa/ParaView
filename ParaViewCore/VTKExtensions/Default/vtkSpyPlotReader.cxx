@@ -221,7 +221,7 @@ int vtkSpyPlotReader::RequestDataObject(
 
 //-----------------------------------------------------------------------------
 // Read the case file and the first binary file do get meta
-// informations (number of files, number of fields, number of timestep).
+// information (number of files, number of fields, number of timestep).
 int vtkSpyPlotReader::RequestInformation(
   vtkInformation* request, vtkInformationVector** inputVector, vtkInformationVector* outputVector)
 {
@@ -490,7 +490,7 @@ int vtkSpyPlotReader::UpdateTimeStep(
   if (outputInfo->Has(vtkStreamingDemandDrivenPipeline::UPDATE_TIME_STEP()) &&
     (this->TimeSteps->size() > 0))
   {
-    // Get the requested time step. We only supprt requests of a single time
+    // Get the requested time step. We only support requests of a single time
     // step in this reader right now
     double requestedTimeStep =
       outputInfo->Get(vtkStreamingDemandDrivenPipeline::UPDATE_TIME_STEP());
@@ -509,7 +509,7 @@ int vtkSpyPlotReader::UpdateTimeStep(
     }
   }
   this->CurrentTimeStep = closestStep;
-  if ((outputData != NULL) && (static_cast<int>(this->TimeSteps->size()) < this->CurrentTimeStep))
+  if ((outputData != NULL) && (static_cast<int>(this->TimeSteps->size()) > this->CurrentTimeStep))
   {
     outputData->GetInformation()->Set(
       vtkDataObject::DATA_TIME_STEP(), (*this->TimeSteps)[this->CurrentTimeStep]);
@@ -728,7 +728,7 @@ int vtkSpyPlotReader::RequestData(vtkInformation* request,
     info->Set(vtkStreamingDemandDrivenPipeline::BOUNDS(), b, 6);
 
     // Gather blocks per level information.
-    // Note that this is a quick fix. Taking this extra pass shouldbe avoided. -Leo
+    // Note that this is a quick fix. Taking this extra pass should be avoided. -Leo
     if (this->IsAMR)
     {
       std::vector<int> blocksPerLevel;
@@ -1473,7 +1473,7 @@ void vtkSpyPlotReader::PrintSelf(ostream& os, vtkIndent indent)
     this->GlobalController->PrintSelf(os, indent.GetNextIndent());
   }
 }
-// Get the minimum level that actuall has data and
+// Get the minimum level that actually has data and
 // its grid spacing. If this process has no blocks
 // then we return spacing and min level close to infinity.
 void vtkSpyPlotReader::GetLocalMinLevelAndSpacing(
@@ -1629,7 +1629,7 @@ bool vtkSpyPlotReader::GetLocalBoxSize(vtkSpyPlotBlockIterator* biter, int local
 }
 
 // Determines if the box size is a constant over the entire data set
-// if so sets this->GlobalBoxSize to that size, otehrwise sets
+// if so sets this->GlobalBoxSize to that size, otherwise sets
 // it to -1,-1,-1
 void vtkSpyPlotReader::SetGlobalBoxSize(vtkSpyPlotBlockIterator* biter)
 {
@@ -1658,7 +1658,7 @@ void vtkSpyPlotReader::SetGlobalBoxSize(vtkSpyPlotBlockIterator* biter)
     return;
   }
 
-  // To decide weather or not box size is constant...
+  // To decide whether or not box size is constant...
   // 1) get the smallest box size across procs
   int globalBoxSize[3] = { -1, -1, -1 };
   this->GlobalController->AllReduce(localBoxSize, globalBoxSize, 3, vtkCommunicator::MIN_OP);
@@ -1683,12 +1683,12 @@ void vtkSpyPlotReader::SetGlobalBoxSize(vtkSpyPlotBlockIterator* biter)
       isConstantGlobally = false;
     }
   }
-  // 3) send a flag indicating change/no change occured
+  // 3) send a flag indicating change/no change occurred
   int lFlag = !isConstantLocally || !isConstantGlobally ? -1 : 1;
   int gFlag = 0;
   this->GlobalController->AllReduce(&lFlag, &gFlag, 1, vtkCommunicator::MIN_OP);
 
-  // set the global box size acordingly
+  // set the global box size accordingly
   switch (gFlag)
   {
     // box size varies

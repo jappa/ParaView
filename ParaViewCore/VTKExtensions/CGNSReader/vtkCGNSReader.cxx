@@ -14,6 +14,13 @@
 =========================================================================*/
 //  Copyright 2013-2014 Mickael Philit.
 
+#ifdef _WINDOWS
+// the 4211 warning is emitted when building this file with Visual Studio 2013
+// for an SDK-specific file (sys/stat.inl:57) => disable warning
+#pragma warning(push)
+#pragma warning(disable : 4211)
+#endif
+
 #include "vtkCGNSReader.h"
 #include "vtkCGNSReaderInternal.h" // For parsing information request
 
@@ -1280,9 +1287,9 @@ vtkSmartPointer<vtkDataObject> vtkCGNSReader::vtkPrivate::readCurvilinearZone(in
   // wacky hack ...
   // memory aliasing is done
   // since in vtk points array stores XYZ contiguously
-  // and they are stored separatly in cgns file
+  // and they are stored separately in cgns file
   // the memory layout is set so that one cgns file array
-  // will be filling every 3 chuncks in memory
+  // will be filling every 3 chunks in memory
   memEnd[0] *= 3;
 
   // Set up points
@@ -1951,7 +1958,7 @@ int vtkCGNSReader::GetUnstructuredZone(
         bool mustReverse = faceId > 0;
         faceId = std::abs(faceId);
 
-        // the following is needed because when the NGON_n face data do not preceeds the
+        // the following is needed because when the NGON_n face data do not precedes the
         // NFACE_n cell data, the indices are continuous, so a "global-to-local" mapping must be
         // done.
         for (std::size_t sec = 0; sec < ngonSec.size(); sec++)
@@ -2632,7 +2639,7 @@ int vtkCGNSReader::RequestData(vtkInformation* vtkNotUsed(request),
 
   vtkDebugMacro(<< "CGNSReader::RequestData: Reading from file <" << this->FileName << ">...");
 
-  // Openning with cgio layer
+  // Opening with cgio layer
   ier = cgio_open_file(this->FileName, CGIO_MODE_READ, 0, &(this->cgioNum));
   if (ier != CG_OK)
   {
@@ -3374,7 +3381,7 @@ void vtkCGNSReader::DisableAllFamilies()
 // *************** LEGACY API **************************************************
 //------------------------------------------------------------------------------
 #if !defined(VTK_LEGACY_REMOVE)
-void vtkCGNSReader::SetLoadBndPatch(int val)
+void vtkCGNSReader::SetLoadBndPatch(int vtkNotUsed(val))
 {
   VTK_LEGACY_BODY(vtkCGNSReader::SetLoadBndPatch, "ParaView 5.5");
 }
@@ -3392,7 +3399,7 @@ void vtkCGNSReader::LoadBndPatchOff()
 }
 
 //------------------------------------------------------------------------------
-void vtkCGNSReader::SetLoadMesh(bool val)
+void vtkCGNSReader::SetLoadMesh(bool vtkNotUsed(val))
 {
   VTK_LEGACY_BODY(vtkCGNSReader::SetLoadMesh, "ParaView 5.5");
 }
@@ -3411,3 +3418,6 @@ void vtkCGNSReader::LoadMeshOff()
 
 #endif // !defined(VTK_LEGACY_REMOVE)
 //==============================================================================
+#ifdef _WINDOWS
+#pragma warning(pop)
+#endif

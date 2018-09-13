@@ -30,6 +30,7 @@
 
 class vtkAlgorithm;
 class vtkAlgorithmOutput;
+class vtkInformation;
 
 class VTKPVSERVERIMPLEMENTATIONCORE_EXPORT vtkSISourceProxy : public vtkSIProxy
 {
@@ -60,7 +61,7 @@ public:
   virtual void SetupSelectionProxy(int port, vtkSIProxy* extractSelection);
 
   /**
-   * Allow to shut down pipeline execution. This is particulary useful for
+   * Allow to shut down pipeline execution. This is particularly useful for
    * a Catalyst session that does not contains any real data.
    */
   virtual void SetDisablePipelineExecution(bool value) { this->DisablePipelineExecution = value; }
@@ -83,6 +84,14 @@ protected:
    * Read xml-attributes.
    */
   bool ReadXMLAttributes(vtkPVXMLElement* element) VTK_OVERRIDE;
+
+  /**
+   * Called after CreateVTKObjects(). The main difference for subclasses when
+   * overriding CreateVTKObjects() or OnCreateVTKObjects() is that
+   * CreateVTKObjects() is called before ReadXMLAttributes() is called, while
+   * OnCreateVTKObjects() is called after ReadXMLAttributes().
+   */
+  void OnCreateVTKObjects() override;
 
   /**
    * Create the output ports and add post filters for each output port.

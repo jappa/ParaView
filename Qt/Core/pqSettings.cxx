@@ -29,8 +29,9 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =========================================================================*/
-#include <pqSettings.h>
+#include "pqSettings.h"
 
+#include <QCoreApplication>
 #include <QDesktopWidget>
 #include <QDialog>
 #include <QDockWidget>
@@ -40,6 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMProperty.h"
 #include "vtkSMPropertyHelper.h"
 
+#ifndef VTK_LEGACY_REMOVE
 namespace
 {
 class pqSettingsCleaner : public QObject
@@ -58,12 +60,6 @@ public:
 }
 
 //-----------------------------------------------------------------------------
-pqSettings::pqSettings(const QString& organization, const QString& application, QObject* p)
-  : QSettings(QSettings::IniFormat, QSettings::UserScope, organization, application, p)
-{
-}
-
-//-----------------------------------------------------------------------------
 pqSettings::pqSettings(const QString& filename, bool temporary, QObject* parentObject)
   : QSettings(filename, QSettings::IniFormat, parentObject)
 {
@@ -72,11 +68,50 @@ pqSettings::pqSettings(const QString& filename, bool temporary, QObject* parentO
     new pqSettingsCleaner(filename, this);
   }
 }
+#endif // VTK_LEGACY_REMOVE
 
 //-----------------------------------------------------------------------------
-pqSettings::pqSettings(const QString& fname, Format fmt, QObject* parentObject)
-  : Superclass(fname, fmt, parentObject)
+pqSettings::pqSettings(const QString& org, const QString& app, QObject* prnt)
+  : Superclass(org, app, prnt)
 {
+}
+//-----------------------------------------------------------------------------
+pqSettings::pqSettings(Scope spe, const QString& org, const QString& app, QObject* prnt)
+  : Superclass(spe, org, app, prnt)
+{
+}
+
+//-----------------------------------------------------------------------------
+pqSettings::pqSettings(Format fmt, Scope spe, const QString& org, const QString& app, QObject* prnt)
+  : Superclass(fmt, spe, org, app, prnt)
+{
+}
+
+//-----------------------------------------------------------------------------
+pqSettings::pqSettings(const QString& fn, Format fmt, QObject* prnt)
+  : Superclass(fn, fmt, prnt)
+{
+}
+
+//-----------------------------------------------------------------------------
+pqSettings::pqSettings(QObject* prnt)
+  : Superclass(prnt)
+{
+}
+
+//-----------------------------------------------------------------------------
+pqSettings::~pqSettings()
+{
+}
+
+//-----------------------------------------------------------------------------
+QString pqSettings::backup(const QString& argName)
+{
+  this->sync();
+
+  QString fname = argName.isEmpty() ? (this->fileName() + ".bak") : argName;
+  QFile::remove(fname);
+  return QFile::copy(this->fileName(), fname) ? fname : QString();
 }
 
 //-----------------------------------------------------------------------------
@@ -86,23 +121,42 @@ void pqSettings::alertSettingsModified()
 }
 
 //-----------------------------------------------------------------------------
-void pqSettings::saveState(const QMainWindow& window, const QString& key)
-{
-  this->beginGroup(key);
-  this->setValue("Position", window.pos());
-  this->setValue("Size", window.size());
-  this->setValue("Layout", window.saveState());
-  QDesktopWidget desktop;
-  this->setValue("Screen", desktop.screenNumber(&window));
-  this->endGroup();
-}
-
-//-----------------------------------------------------------------------------
 void pqSettings::saveState(const QDialog& dialog, const QString& key)
 {
   this->beginGroup(key);
   this->setValue("Position", dialog.pos());
   this->setValue("Size", dialog.size());
+  // let's add a PID to avoid restoring dialog position across different
+  // sessions. This avoids issues reported in #18163.
+  this->setValue("PID", QCoreApplication::applicationPid());
+  this->endGroup();
+}
+
+//-----------------------------------------------------------------------------
+void pqSettings::restoreState(const QString& key, QDialog& dialog)
+{
+  this->beginGroup(key);
+
+  if (this->contains("Size"))
+  {
+    dialog.resize(this->value("Size").toSize());
+  }
+
+  // restore position only if it is the same process.
+  if (this->value("PID").value<qint64>() == QCoreApplication::applicationPid() &&
+    this->contains("Position"))
+  {
+    dialog.move(this->value("Position").toPoint());
+  }
+  this->endGroup();
+}
+
+//-----------------------------------------------------------------------------
+void pqSettings::saveState(const QMainWindow& window, const QString& key)
+{
+  this->beginGroup(key);
+  this->setValue("Size", window.size());
+  this->setValue("Layout", window.saveState());
   this->endGroup();
 }
 
@@ -114,35 +168,6 @@ void pqSettings::restoreState(const QString& key, QMainWindow& window)
   if (this->contains("Size"))
   {
     window.resize(this->value("Size").toSize());
-  }
-
-  if (this->contains("Position"))
-  {
-    QPoint windowTopLeft = this->value("Position").toPoint();
-    QRect mwRect(windowTopLeft, window.size());
-
-    QDesktopWidget desktop;
-
-    // Default to primary screen, but restore to any saved screen we may have.
-    QRect desktopRect = desktop.availableGeometry(desktop.primaryScreen());
-    if (this->contains("Screen"))
-    {
-      int screen = this->value("Screen").toInt();
-      desktopRect = desktop.availableGeometry(screen);
-    }
-
-    // try moving it to keep size
-    if (!desktopRect.contains(mwRect))
-    {
-      mwRect = QRect(desktopRect.topLeft(), window.size());
-    }
-    // still doesn't fit, resize it
-    if (!desktopRect.contains(mwRect))
-    {
-      mwRect = QRect(desktopRect.topLeft(), window.size());
-      window.resize(desktopRect.size());
-    }
-    window.move(mwRect.topLeft());
   }
 
   if (this->contains("Layout"))
@@ -179,24 +204,6 @@ void pqSettings::saveInQSettings(const char* key, vtkSMProperty* smproperty)
   {
     this->setValue(key, vtkSMPropertyHelper(smproperty).GetAsString());
   }
-}
-
-//-----------------------------------------------------------------------------
-void pqSettings::restoreState(const QString& key, QDialog& dialog)
-{
-  this->beginGroup(key);
-
-  if (this->contains("Size"))
-  {
-    dialog.resize(this->value("Size").toSize());
-  }
-
-  if (this->contains("Position"))
-  {
-    dialog.move(this->value("Position").toPoint());
-  }
-
-  this->endGroup();
 }
 
 //-----------------------------------------------------------------------------

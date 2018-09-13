@@ -98,7 +98,7 @@
       "exclude": [
           { "path": "vtkPConvertSelection*" },
           { "path": "vtkPVExtractSelection*" },
-          { "path": "vtkPVExtractArraysOverTime*" }
+          { "path": "vtkPythonSelector*" }
       ],
       "patches": [
           { "path": "ClientServerCore-Core-CMake.patch" }
@@ -164,6 +164,7 @@
         { "class":"vtkCellDataToPointData" },
         { "class":"vtkFeatureEdges" },
         { "class":"vtkImageAppend" },
+        { "class":"vtkMoleculeAppend" },
         { "class":"vtkPointDataToCellData" },
         { "class":"vtkProbeFilter" },
         { "class":"vtkQuadricClustering" },
@@ -172,6 +173,18 @@
       ],
       "replace":[
         { "path":"VTK/Filters/Core/CMakeLists.txt" }
+      ],
+      "cswrap":true,
+      "pythonwrap":true
+    },
+    { "name":"vtkFiltersGeneral",
+      "path":"VTK/Filters/General",
+      "include":[
+        { "class":"vtkPassArrays" }
+      ],
+      "replace":[
+        { "path":"VTK/Filters/General/module.cmake" },
+        { "path":"VTK/Filters/General/CMakeLists.txt" }
       ],
       "cswrap":true,
       "pythonwrap":true
@@ -206,8 +219,14 @@
     { "name":"vtkThirdPartyzlib",
       "path":"VTK/ThirdParty/zlib"
     },
+    { "name":"vtkThirdPartylzma",
+      "path":"VTK/ThirdParty/lzma"
+    },
     { "name":"vtkThirdPartylz4",
       "path":"VTK/ThirdParty/lz4"
+    },
+    { "name":"vtkThirdPartydoubleconversion",
+      "path":"VTK/ThirdParty/doubleconversion"
     },
     { "name":"vtkThirdPartyexpat",
       "path":"VTK/ThirdParty/expat"
@@ -328,6 +347,7 @@
     { "path":"ParaViewCore/ServerManager/SMApplication/Resources/filters.xml",
       "proxies":[
         "Append",
+        "AppendMolecule",
         "AppendPolyData",
         "FeatureEdges",
         "PointDataToCellData",

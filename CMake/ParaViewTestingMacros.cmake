@@ -99,7 +99,7 @@ function (paraview_test_load_data_dirs name)
   set(data)
   foreach (datafile IN LISTS ARGN)
     list(APPEND data
-      "DATA{${PARAVIEW_TEST_DATA_DIR}/${datafile}/,REGEX:.*}")
+      "DATA{${PARAVIEW_TEST_DATA_DIR}/${datafile}/,RECURSE:,REGEX:.*}")
   endforeach ()
   _paraview_test_load_data(${data})
 endfunction ()
@@ -398,7 +398,7 @@ FUNCTION (add_tile_display_tests prefix tdx tdy )
   PV_PARSE_ARGUMENTS(ACT "TEST_SCRIPTS;BASELINE_DIR;LOAD_PLUGIN;PLUGIN_PATH" "" ${ARGN})
   PV_EXTRACT_CLIENT_SERVER_ARGS(${ARGN})
 
-  MATH(EXPR REQUIRED_CPU '${tdx}*${tdy}-1') # -1 is for LESS
+  MATH(EXPR REQUIRED_CPU "${tdx}*${tdy}-1") # -1 is for LESS
   if (${PARAVIEW_USE_MPI})
     if (NOT DEFINED VTK_MPI_MAX_NUMPROCS)
       set (VTK_MPI_MAX_NUMPROCS ${MPIEXEC_MAX_NUMPROCS})

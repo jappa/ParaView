@@ -165,36 +165,33 @@ annotation text.
           <DataType value="vtkTable" />
         </DataTypeDomain>
         <InputArrayDomain attribute_type="any"
-                          name="input_array"
-                          number_of_components="1" />
+                          name="input_array" />
            <Documentation>
              Set the input of the filter. To avoid the complications/confusion when identifying
              elements in a composite dataset, this filter doesn't support composite datasets
              currently.
            </Documentation>
       </InputProperty>
-      <IntVectorProperty command="SetArrayAssociation"
-                         default_values="2"
-                         name="ArrayAssociation"
-                         number_of_elements="1">
-        <Documentation>Select the attribute to use to popular array names from.</Documentation>
-        <EnumerationDomain name="enum">
-          <Entry text="Point Data" value="0" />
-          <Entry text="Cell Data" value="1" />
-          <Entry text="Field Data" value="2" />
-          <Entry text="Row Data" value="6" />
-        </EnumerationDomain>
-      </IntVectorProperty>
-      <StringVectorProperty command="SetArrayName"
-                            name="ArrayName"
-                            number_of_elements="1">
-        <ArrayListDomain name="array_list">
+      <StringVectorProperty animateable="0"
+                            command="SetInputArrayToProcess"
+                            element_types="0 0 0 0 2"
+                            name="SelectInputArray"
+                            number_of_elements="5">
+        <ArrayListDomain attribute_type="Scalars"
+                         name="array_list">
           <RequiredProperties>
             <Property function="Input"
                       name="Input" />
           </RequiredProperties>
         </ArrayListDomain>
-        <Documentation>Choose arrays that is going to be displayed</Documentation>
+        <FieldDataDomain name="field_list">
+          <RequiredProperties>
+            <Property function="Input"
+                      name="Input" />
+          </RequiredProperties>
+        </FieldDataDomain>
+        <Documentation>This property indicates the name of the array from which
+        to compute the histogram.</Documentation>
       </StringVectorProperty>
       <IntVectorProperty name="ElementId"
                          command="SetElementId"
@@ -534,6 +531,32 @@ annotation text.
       </DoubleVectorProperty>
       <!-- End ProgrammableSource -->
     </SourceProxy>
+
+    <SourceProxy class="vtkPythonProgrammableFilter"
+                 label="Live Programmable Source"
+                 name="LiveProgrammableSource"
+                 base_proxygroup="sources"
+                 base_proxyname="ProgrammableSource">
+      <Documentation>
+        A programmable source that can produce new data autonomously.
+      </Documentation>
+      <StringVectorProperty command="SetCheckNeedsUpdateScript"
+                            label="Script (CheckNeedsUpdate)"
+                            name="CheckNeedsUpdateScript"
+                            number_of_elements="1">
+        <Hints>
+          <Widget type="multi_line" syntax="python" />
+        </Hints>
+        <Documentation>
+          Specify the script to use to check if the filter/source has new data.
+          This is only needed for "live" sources, that can cause data to be available
+          outside of ParaView.
+        </Documentation>
+      </StringVectorProperty>
+      <Hints>
+        <LiveSource />
+      </Hints>
+   </SourceProxy>
   </ProxyGroup>
   <!-- =================================================================== -->
   <ProxyGroup name="animation">

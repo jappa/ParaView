@@ -3,11 +3,12 @@
 
 #include "pqActiveObjects.h"
 #include "pqApplicationCore.h"
-#include "pqCoreUtilities.h"
 #include "pqEventDispatcher.h"
 #include "vtkPVConfig.h"
+#include "vtkPVFileInformation.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QMessageBox>
 
 //-----------------------------------------------------------------------------
@@ -36,16 +37,7 @@ pqExampleVisualizationsDialog::~pqExampleVisualizationsDialog()
 //-----------------------------------------------------------------------------
 void pqExampleVisualizationsDialog::onButtonPressed()
 {
-#if defined(_WIN32) || defined(__APPLE__)
-  QString dataPath = QCoreApplication::applicationDirPath() + "/../data";
-#else
-  QString appdir = QCoreApplication::applicationDirPath();
-  QString dataPath = QFileInfo(appdir).fileName() == "bin"
-    ?
-    /* w/o shared forwarding */ appdir + "/../share/paraview-" PARAVIEW_VERSION "/data"
-    :
-    /* w/ shared forwarding  */ appdir + "/../../share/paraview-" PARAVIEW_VERSION "/data";
-#endif
+  QString dataPath(vtkPVFileInformation::GetParaViewExampleFilesDirectory().c_str());
   QPushButton* button = qobject_cast<QPushButton*>(sender());
   if (button)
   {

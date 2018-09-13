@@ -1,12 +1,12 @@
 paraview_test_load_data(""
-  "blow data.myvtk"
+  blow_data.myvtk
   blow.vtk
   bot2.wrl
   can.ex2
   disk_out_ref.ex2
   dualSphereAnimation4.pvd
   elements.vtu
-  "iron protein.vtk"
+  iron_protein.vtk
   multicomb_0.vts
   poisson_3dall_2.xmf
   PythonProgrammableFilterParameters.xml
@@ -16,7 +16,8 @@ paraview_test_load_data(""
   TestRepresentationTypePlugin.xml
   )
 paraview_test_load_data_dirs(""
-  dualSphereAnimation)
+  dualSphereAnimation
+  FileSeries)
 
 ###############################################################################
 # For python scripts for testing.
@@ -53,6 +54,7 @@ set(PY_TESTS
   SaveAnimation.py
   SaveScreenshot.py,NO_VALID
   ScalarBarActorBackwardsCompatibility.py,NO_VALID
+  TestVTKSeriesWithMeta.py
   ValidateSources.py,NO_VALID
   VRMLSource.py,NO_VALID
   )

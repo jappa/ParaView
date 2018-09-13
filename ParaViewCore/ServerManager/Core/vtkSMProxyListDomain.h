@@ -40,6 +40,10 @@
 #include "vtkPVServerManagerCoreModule.h" //needed for exports
 #include "vtkSMDomain.h"
 
+#include <string>  // for std::string
+#include <utility> // for std::pair
+#include <vector>  // for std::vector
+
 class vtkSMProperty;
 class vtkSMProxy;
 class vtkSMProxyListDomainInternals;
@@ -51,6 +55,26 @@ public:
   static vtkSMProxyListDomain* New();
   vtkTypeMacro(vtkSMProxyListDomain, vtkSMDomain);
   void PrintSelf(ostream& os, vtkIndent indent) VTK_OVERRIDE;
+
+  /**
+   * Used to identify a proxy type.
+   */
+  struct ProxyType
+  {
+    std::string GroupName;
+    std::string ProxyName;
+    ProxyType() {}
+    ProxyType(const std::string& group, const std::string& name)
+      : GroupName(group)
+      , ProxyName(name)
+    {
+    }
+  };
+
+  /**
+   * Returns a vector of proxy types for the proxies in the domain.
+   */
+  const std::vector<ProxyType>& GetProxyTypes() const;
 
   /**
    * Returns the number of proxies in the domain.
@@ -109,7 +133,7 @@ public:
   vtkSMProxy* FindProxy(const char* xmlgroup, const char* xmlname);
 
   /**
-   * Removes the first occurence of the \c proxy in the domain.
+   * Removes the first occurrence of the \c proxy in the domain.
    * Returns if the proxy was removed.
    */
   int RemoveProxy(vtkSMProxy* proxy);

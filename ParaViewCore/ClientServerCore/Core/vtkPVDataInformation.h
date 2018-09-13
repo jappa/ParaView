@@ -39,6 +39,7 @@ class vtkDataObject;
 class vtkDataSet;
 class vtkGenericDataSet;
 class vtkGraph;
+class vtkHyperTreeGrid;
 class vtkInformation;
 class vtkPVArrayInformation;
 class vtkPVCompositeDataInformation;
@@ -128,11 +129,20 @@ public:
   vtkGetMacro(NumberOfPoints, vtkTypeInt64);
   vtkGetMacro(NumberOfCells, vtkTypeInt64);
   vtkGetMacro(NumberOfRows, vtkTypeInt64);
+  vtkGetMacro(NumberOfTrees, vtkTypeInt64);
+  vtkGetMacro(NumberOfVertices, vtkTypeInt64);
+  vtkGetMacro(NumberOfLeaves, vtkTypeInt64);
   vtkGetMacro(MemorySize, int);
   vtkGetMacro(PolygonCount, int);
   vtkGetMacro(NumberOfDataSets, int);
   vtkGetVector6Macro(Bounds, double);
   //@}
+
+  /**
+   * Returns the number of elements of the given type where type can
+   * vtkDataObject::POINT, vtkDataObject::CELL, ... etc.
+   */
+  vtkTypeInt64 GetNumberOfElements(int type);
 
   /**
    * Returns a string describing the datatype that can be directly
@@ -292,6 +302,7 @@ protected:
   void CopyFromGenericDataSet(vtkGenericDataSet* data);
   void CopyFromGraph(vtkGraph* graph);
   void CopyFromTable(vtkTable* table);
+  void CopyFromHyperTreeGrid(vtkHyperTreeGrid* data);
   void CopyFromSelection(vtkSelection* selection);
   void CopyCommonMetaData(vtkDataObject*, vtkInformation*);
 
@@ -301,9 +312,12 @@ protected:
   int DataSetType;
   int CompositeDataSetType;
   int NumberOfDataSets;
-  vtkTypeInt64 NumberOfPoints;
+  vtkTypeInt64 NumberOfPoints; // data sets
   vtkTypeInt64 NumberOfCells;
-  vtkTypeInt64 NumberOfRows;
+  vtkTypeInt64 NumberOfRows;  // tables
+  vtkTypeInt64 NumberOfTrees; // hypertreegrids
+  vtkTypeInt64 NumberOfVertices;
+  vtkTypeInt64 NumberOfLeaves;
   int MemorySize;
   vtkIdType PolygonCount;
   double Bounds[6];

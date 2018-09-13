@@ -15,14 +15,14 @@ namespace JAMA
    orthogonal matrix Q and an n-by-n upper triangular matrix R so that
    A = Q*R.
 <P>
-   The QR decompostion always exists, even if the matrix does not have
+   The QR decomposition always exists, even if the matrix does not have
    full rank, so the constructor will never fail.  The primary use of the
    QR decomposition is in the least squares solution of nonsquare systems
    of simultaneous linear equations.  This will fail if isFullRank()
    returns 0 (false).
 
 <p>
-    The Q and R factors can be retrived via the getQ() and getR()
+    The Q and R factors can be retrieved via the getQ() and getR()
     methods. Furthermore, a solve() method is provided to find the
     least squares solution of Ax=b using the QR factors.
 
@@ -123,7 +123,7 @@ public:
 
    /**
 
-   Retreive the Householder vectors from QR factorization
+   Retrieve the Householder vectors from QR factorization
    @returns lower trapezoidal matrix whose columns define the reflections
    */
 

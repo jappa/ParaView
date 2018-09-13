@@ -13,7 +13,7 @@ A simple example::
   # Apply a shrink filter
   shrink = Shrink(sphere)
 
-  # Turn the visiblity of the shrink object on.
+  # Turn the visibility of the shrink object on.
   Show(shrink)
 
   # Render the scene
@@ -81,16 +81,20 @@ def Disconnect(ns=None, force=True):
 
 # -----------------------------------------------------------------------------
 
-def Connect(ds_host=None, ds_port=11111, rs_host=None, rs_port=11111):
+def Connect(ds_host=None, ds_port=11111, rs_host=None, rs_port=11111, timeout = 60):
     """Creates a connection to a server. Example usage::
 
     > Connect("amber") # Connect to a single server at default port
     > Connect("amber", 12345) # Connect to a single server at port 12345
-    > Connect("amber", 11111, "vis_cluster", 11111) # connect to data server, render server pair"""
+    > Connect("amber", 11111, "vis_cluster", 11111) # connect to data server, render server pair
+    > Connect("amber", timeout=30) # Connect to a single server at default port with a 30s timeout instead of default 60s
+    > Connect("amber", timeout=-1) # Connect to a single server at default port with no timeout instead of default 60s
+    > Connect("amber", timeout=0)  # Connect to a single server at default port without retrying instead of retrying for the default 60s"""
     Disconnect(globals(), False)
-    connection = servermanager.Connect(ds_host, ds_port, rs_host, rs_port)
-    _initializeSession(connection)
-    _add_functions(globals())
+    connection = servermanager.Connect(ds_host, ds_port, rs_host, rs_port, timeout)
+    if not (connection is None):
+      _initializeSession(connection)
+      _add_functions(globals())
     return connection
 
 # -----------------------------------------------------------------------------
@@ -100,6 +104,15 @@ def ReverseConnect(port=11111):
     an incoming connection from the server."""
     Disconnect(globals(), False)
     connection = servermanager.ReverseConnect(port)
+    _initializeSession(connection)
+    _add_functions(globals())
+    return connection
+
+# -----------------------------------------------------------------------------
+
+def ResetSession():
+    """Reset the session to its initial state."""
+    connection = servermanager.ResetSession()
     _initializeSession(connection)
     _add_functions(globals())
     return connection
@@ -474,6 +487,15 @@ def Show(proxy=None, view=None, **params):
     return rep
 
 # -----------------------------------------------------------------------------
+def ShowAll(view=None):
+    """Show all pipeline sources in the given view.
+    If view is not specified, active view is used."""
+    if not view:
+        view = active_objects.view
+    controller = servermanager.ParaViewPipelineController()
+    controller.ShowAll(view)
+
+# -----------------------------------------------------------------------------
 def Hide(proxy=None, view=None):
     """Turns the visibility of a given pipeline object off in the given view.
     If pipeline object and/or view are not specified, active objects are used."""
@@ -673,6 +695,21 @@ def GetViewProperties(view=None):
     """"Same as GetActiveView(), this API is provided just for consistency with
     GetDisplayProperties()."""
     return GetActiveView()
+
+# -----------------------------------------------------------------------------
+def LoadPalette(paletteName):
+    """Load a color palette to override the default foreground and background
+    colors used by ParaView views.  The current global palette's colors are set
+    to the colors in the loaded palette."""
+    pxm = servermanager.ProxyManager()
+    palette = pxm.GetProxy("global_properties", "ColorPalette")
+    prototype = pxm.GetPrototypeProxy("palettes", paletteName)
+
+    if palette is None or prototype is None:
+        return
+
+    palette.Copy(prototype)
+    palette.UpdateVTKObjects()
 
 #==============================================================================
 # ServerManager methods
@@ -1055,10 +1092,23 @@ def SaveScreenshot(filename, viewOrLayout=None, **params):
           Set to 1 (or True) to save an image with background set to alpha=0, if
           supported by the output image format.
 
-        ImageQuality (int)
-          Set a number in the range [0, 100] to specify the output image
-          quality/compression. 0 is least quality/most compressed, while 100
-          means best quality/least compressed.
+    In addition, several format-specific keyword parameters can be specified.
+    The format is chosen based on the file extension.
+
+    For JPEG (`*.jpg`), the following parameters are available (optional)
+
+        Quality (int) [0, 100]
+          Specify the JPEG compression quality. `O` is low quality (maximum compression)
+          and `100` is high quality (least compression).
+
+        Progressive (int):
+          Set to 1 (or True) to save progressive JPEG.
+
+    For PNG (`*.png`), the following parameters are available (optional)
+
+        CompressionLevel (int) [0, 9]
+          Specify the *zlib* compression level. `0` is no compression, while `9` is
+          maximum compression.
 
     **Legacy Parameters**
 
@@ -1078,6 +1128,11 @@ def SaveScreenshot(filename, viewOrLayout=None, **params):
 
         quality (int)
           Output image quality, a number in the range [0, 100].
+
+        ImageQuality (int)
+            For ParaView 5.4, the following parameters were available, however
+            it is ignored starting with ParaView 5.5. Instead, it is recommended
+            to use format-specific quality parameters based on the file format being used.
     """
     # Let's handle backwards compatibility.
     # Previous API for this method took the following arguments:
@@ -1109,8 +1164,25 @@ def SaveScreenshot(filename, viewOrLayout=None, **params):
     options.View = viewOrLayout if viewOrLayout.IsA("vtkSMViewProxy") else None
     options.SaveAllViews = True if viewOrLayout.IsA("vtkSMViewLayoutProxy") else False
 
-    SetProperties(options, **params)
+    # this will choose the correct format.
+    options.UpdateDefaultsAndVisibilities(filename)
+
     controller.PostInitializeProxy(options)
+
+    # explicitly process format properties.
+    formatProxy = options.Format
+    formatProperties = formatProxy.ListProperties()
+    for prop in formatProperties:
+        if prop in params:
+            formatProxy.SetPropertyWithName(prop, params[prop])
+            del params[prop]
+
+    if "ImageQuality" in params:
+        import warnings
+        warnings.warn("'ImageQuality' is deprecated and will be ignored.", DeprecationWarning)
+        del params["ImageQuality"]
+
+    SetProperties(options, **params)
     return options.WriteImage(filename)
 
 # -----------------------------------------------------------------------------
@@ -1143,13 +1215,6 @@ def SaveAnimation(filename, viewOrLayout=None, scene=None, **params):
         `SaveAnimation` supports all keyword parameters supported by
         `SaveScreenshot`. In addition, the following parameters are supported:
 
-        DisconnectAndSave (int):
-          In client-server mode (with rendering-capable server), set this to 1
-          to disconnect from the server and let the server save the animation
-          out before terminating. In that case, the filename specifies a path on
-          the server. Defaults to 0, in which case the animation is saved on the
-          client.
-
         FrameRate (int):
           Frame rate in frames per second for the output. This only affects the
           output when generated movies (`avi` or `ogv`), and not when saving the
@@ -1158,6 +1223,52 @@ def SaveAnimation(filename, viewOrLayout=None, scene=None, **params):
         FrameWindow (tuple(int,int))
           To save a part of the animation, provide the range in frames or
           timesteps index.
+
+    In addition, several format-specific keyword parameters can be specified.
+    The format is chosen based on the file extension.
+
+    For Image-based file-formats that save series of images e.g. PNG, JPEG,
+    following parameters are available.
+
+        SuffixFormat (string):
+          Format string used to convert the frame number to file name suffix.
+
+    FFMPEG avi file format supports following parameters.
+
+        Compression (int)
+          Set to 1 or True to enable compression.
+
+        Quality:
+          When compression is 1 (or True), this specifies the compression
+          quality. `0` is worst quality (smallest file size) and `2` is best
+          quality (largest file size).
+
+    VideoForWindows (VFW) avi file format supports following parameters.
+
+        Quality:
+          This specifies the compression quality. `0` is worst quality
+          (smallest file size) and `2` is best quality (largest file size).
+
+    OGG/Theora file format supports following parameters.
+
+        Quality:
+          This specifies the compression quality. `0` is worst quality
+          (smallest file size) and `2` is best quality (largest file size).
+
+        UseSubsampling:
+          When set to 1 (or True), the video will be encoded using 4:2:0
+          subsampling for the color channels.
+
+    **Obsolete Parameters**
+
+        DisconnectAndSave (int):
+          This mode is no longer supported as of ParaView 5.5, and will be
+          ignored.
+
+        ImageQuality (int)
+            For ParaView 5.4, the following parameters were available, however
+            it is ignored starting with ParaView 5.5. Instead, it is recommended
+            to use format-specific quality parameters based on the file format being used.
     """
     # use active view if no view or layout is specified.
     viewOrLayout = viewOrLayout if viewOrLayout else GetActiveView()
@@ -1169,6 +1280,11 @@ def SaveAnimation(filename, viewOrLayout=None, scene=None, **params):
     if not scene:
         raise RuntimeError("Missing animation scene.")
 
+    if "DisconnectAndSave" in params:
+        import warnings
+        warnings.warn("'DisconnectAndSave' is deprecated and will be ignored.", DeprecationWarning)
+        del params["DisconnectAndSave"]
+
     controller = servermanager.ParaViewPipelineController()
     options = servermanager.misc.SaveAnimation()
     controller.PreInitializeProxy(options)
@@ -1178,9 +1294,25 @@ def SaveAnimation(filename, viewOrLayout=None, scene=None, **params):
     options.View = viewOrLayout if viewOrLayout.IsA("vtkSMViewProxy") else None
     options.SaveAllViews = True if viewOrLayout.IsA("vtkSMViewLayoutProxy") else False
 
-    SetProperties(options, **params)
+    # this will choose the correct format.
+    options.UpdateDefaultsAndVisibilities(filename)
+
     controller.PostInitializeProxy(options)
 
+    # explicitly process format properties.
+    formatProxy = options.Format
+    formatProperties = formatProxy.ListProperties()
+    for prop in formatProperties:
+        if prop in params:
+            formatProxy.SetPropertyWithName(prop, params[prop])
+            del params[prop]
+
+    if "ImageQuality" in params:
+        import warnings
+        warnings.warn("'ImageQuality' is deprecated and will be ignored.", DeprecationWarning)
+        del params["ImageQuality"]
+
+    SetProperties(options, **params)
     return options.WriteAnimation(filename)
 
 def WriteAnimation(filename, **params):
@@ -1615,7 +1747,7 @@ def GetAnimationTrack(propertyname_or_property, index=None, proxy=None):
 
 def GetCameraTrack(view=None):
     """Returns the camera animation track for the given view. If no view is
-    specified, active view will be used. If no exisiting camera animation track
+    specified, active view will be used. If no existing camera animation track
     is found, a new one will be created."""
     if not view:
         view = GetActiveView()

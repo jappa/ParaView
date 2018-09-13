@@ -21,7 +21,10 @@
 #include "vtkMultiProcessController.h"
 #include "vtkObjectFactory.h"
 #include "vtkOpenGLError.h"
+#include "vtkOpenGLRenderUtilities.h"
+#include "vtkOpenGLRenderWindow.h"
 #include "vtkOpenGLRenderer.h"
+#include "vtkOpenGLState.h"
 #include "vtkPVDefaultPass.h"
 #include "vtkRenderState.h"
 #include "vtkRenderWindow.h"
@@ -32,6 +35,8 @@
 
 #include <IceTGL.h>
 #include <assert.h>
+
+using RenUtils = vtkOpenGLRenderUtilities;
 
 // This pass is used to simply render an image onto the frame buffer. Used when
 // an ImageProcessingPass is set to paste the IceT composited image into the
@@ -51,20 +56,28 @@ public:
     vtkOpenGLClearErrorMacro();
     if (this->DelegatePass)
     {
+      RenUtils::MarkDebugEvent("vtkMyImagePasterPass: Delegate Begin");
       this->DelegatePass->Render(render_state);
       vtkOpenGLCheckErrorMacro("failed after delegate pass render");
+      RenUtils::MarkDebugEvent("vtkMyImagePasterPass: Delegate End");
     }
     if (this->IceTCompositePass)
     {
+      RenUtils::MarkDebugEvent("vtkMyImagePasterPass: Image Extract Begin");
       this->IceTCompositePass->GetLastRenderedTile(this->Image);
+      RenUtils::MarkDebugEvent("vtkMyImagePasterPass: Image Extract End");
     }
     if (this->Image.IsValid())
     {
+      RenUtils::MarkDebugEvent("vtkMyImagePasterPass: RGBA Push Begin");
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
       this->Image.PushToFrameBuffer(render_state->GetRenderer());
+      RenUtils::MarkDebugEvent("vtkMyImagePasterPass: RGBA Push End");
       if (this->UseDepthBuffer)
       {
+        RenUtils::MarkDebugEvent("vtkMyImagePasterPass: Depth Push Begin");
         this->IceTCompositePass->PushIceTDepthBufferToScreen(render_state);
+        RenUtils::MarkDebugEvent("vtkMyImagePasterPass: Depth Push End");
       }
     }
     glFinish();
@@ -184,6 +197,10 @@ public:
     vtkOpenGLClearErrorMacro();
     this->Superclass::SetupContext(render_state);
 
+    vtkOpenGLRenderWindow* context =
+      vtkOpenGLRenderWindow::SafeDownCast(render_state->GetRenderer()->GetRenderWindow());
+    vtkOpenGLState* ostate = context->GetState();
+
     // Don't make icet render the composited image to the screen. We'll paste it
     // explicitly if needed. This is required since IceT/Viewport interactions
     // lead to weird results in multi-view configurations. Much easier to simply
@@ -195,16 +212,17 @@ public:
     {
       vtkRenderWindow* window = render_state->GetRenderer()->GetRenderWindow();
       int* size = window->GetActualSize();
-      glViewport(0, 0, size[0], size[1]);
+      ostate->vtkglViewport(0, 0, size[0], size[1]);
     }
-    glDisable(GL_SCISSOR_TEST);
+    ostate->vtkglDisable(GL_SCISSOR_TEST);
     double background[3];
     render_state->GetRenderer()->GetBackground(background);
     // gradient background is not going to work correctly when using volume
     // rendering or translucent geometry, but otherwise if should work fine. We
     // set the background color so that solid background works correctly for
     // these two cases.
-    glClearColor((GLclampf)background[0], (GLclampf)background[1], (GLclampf)background[2], 0.0f);
+    ostate->vtkglClearColor(
+      (GLclampf)background[0], (GLclampf)background[1], (GLclampf)background[2], 0.0f);
     icetEnable(ICET_CORRECT_COLORED_BACKGROUND);
     vtkOpenGLCheckErrorMacro("failed after setup context");
   }

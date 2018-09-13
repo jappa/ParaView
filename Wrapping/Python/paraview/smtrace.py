@@ -51,7 +51,7 @@ new accessor for proxies create before the tracing began
 
 Additionally, there are filters such as :class:`.ProxyFilter`,
 :class:`.PipelineProxyFilter`, etc. which are used to filter properties that get
-traced and where they get traced i.e. in contructor call or right after it.
+traced and where they get traced i.e. in constructor call or right after it.
 
 ===============================
 Notes about references
@@ -179,7 +179,7 @@ class Trace(object):
         """Create a new accessor for a proxy. This returns True when a
         ProxyAccessor has been created, other returns False. This is needed to
         bring into trace proxies that were either already created when the trace
-        was started or were created indirectly and hence not explictly traced."""
+        was started or were created indirectly and hence not explicitly traced."""
         if isinstance(obj, sm.SourceProxy):
             # handle pipeline source/filter proxy.
             pname = obj.SMProxy.GetSessionProxyManager().GetProxyName("sources", obj.SMProxy)
@@ -493,8 +493,9 @@ class RealProxyAccessor(Accessor):
         joiner = ",\n    " if in_ctor else "\n"
         return joiner.join([x.get_property_trace(in_ctor) for x in props])
 
-    def trace_ctor(self, ctor, filter, ctor_args=None, skip_assignment=False, ctor_var=None):
-        args_in_ctor = str(ctor_args) if not ctor_args is None else ""
+    def trace_ctor(self, ctor, filter, ctor_args=None, skip_assignment=False,
+            ctor_var=None, ctor_extra_args=None):
+        args_in_ctor = str(ctor_args) if ctor_args is not None else ""
         # trace any properties that the 'filter' tells us should be traced
         # in ctor.
         ctor_props = [x for x in self.OrderedProperties if filter.should_trace_in_ctor(x)]
@@ -503,6 +504,10 @@ class RealProxyAccessor(Accessor):
             args_in_ctor = "%s, %s" % (args_in_ctor, ctor_props_trace)
         else:
             args_in_ctor += ctor_props_trace
+        if args_in_ctor and ctor_extra_args:
+            args_in_ctor = "%s, %s" % (args_in_ctor, ctor_extra_args)
+        elif ctor_extra_args:
+            args_in_ctor = ctor_extra_args
 
         # locate all the other properties that should be traced in create.
         other_props = [x for x in self.OrderedProperties \
@@ -541,7 +546,7 @@ def ProxyAccessor(*args, **kwargs):
 
 class PropertyTraceHelper(object):
     """PropertyTraceHelper is used by RealProxyAccessor to help with tracing
-    properites. In its contructor, RealProxyAccessor creates a
+    properites. In its constructor, RealProxyAccessor creates a
     PropertyTraceHelper for each of its properties that could potentially need
     to be traced."""
     def __init__(self, propertyname, proxyAccessor):
@@ -617,7 +622,7 @@ class PropertyTraceHelper(object):
         return self.PropertyName if not_fully_scoped else self.FullScopedName
 
     def get_value(self):
-        """Returns the propery value as a string. For proxy properties, this
+        """Returns the property value as a string. For proxy properties, this
         will either be a string used to refer to another proxy or a string used
         to refer to the proxy in a proxy list domain."""
         myobject = self.get_object()
@@ -769,6 +774,9 @@ class WriterProxyFilter(ProxyFilter):
         return False
 
 class ScreenShotHelperProxyFilter(ProxyFilter):
+    def should_never_trace(self, prop):
+        if prop.get_property_name() == "Format": return True
+        return ProxyFilter.should_never_trace(self, prop)
     def should_trace_in_ctor(self, prop):
         return not self.should_never_trace(prop) and self.should_trace_in_create(prop)
 
@@ -806,7 +814,7 @@ def SupplementalProxy(cls):
 
 # ===================================================================================================
 # === TraceItem types ==
-# TraceItems are units of traceable actions triggerred by the application using vtkSMTrace
+# TraceItems are units of traceable actions triggered by the application using vtkSMTrace
 # ===================================================================================================
 
 class TraceItem(object):
@@ -884,13 +892,6 @@ class PropertiesModified(NestableTraceItem):
         self.MTime.Modified()
         self.Comment = "#%s" % comment if not comment is None else \
             "# Properties modified on %s" % str(self.ProxyAccessor)
-        try:
-            # Hack to track ScalarOpacityFunction property changes since that proxy
-            # is shown on the same pqProxyWidget as the ColorTransferFunction proxy --
-            # which is non-standard.
-            if proxy.ScalarOpacityFunction:
-                self.ScalarOpacityFunctionHack = PropertiesModified(self.proxy.ScalarOpacityFunction)
-        except: pass
 
     def finalize(self):
         props = self.ProxyAccessor.get_properties()
@@ -900,27 +901,38 @@ class PropertiesModified(NestableTraceItem):
                 self.Comment,
                 self.ProxyAccessor.trace_properties(props_to_trace, in_ctor=False)])
 
-        # also handle properties on values for properties with ProxyListDomain.
-        for prop in [k for k in props if k.has_proxy_list_domain()]:
+        # Remember, we are monitoring a proxy to trace any properties on it that
+        # are modified. When that's the case, properties on a proxy-property on
+        # that proxy may have been modified too and it would make sense to trace
+        # those as well (e.g. ScalarOpacityFunction on a PVLookupTable proxy).
+        # This loop handles that. We explicitly skip "InputProperty"s, however
+        # since tracing properties modified on the input should not be a
+        # responsibility of this method.
+        for prop in props:
+            if not isinstance(prop.get_object(), sm.ProxyProperty) or \
+                    isinstance(prop.get_object(), sm.InputProperty) or \
+                    prop.DisableSubTrace:
+                continue
             val = prop.get_property_value()
-            if val:
+            try:
+                # val can be None or list of proxies. We are not tracing list of
+                # proxies since we don't want to trace properties like
+                # `view.Representations`.
+                if not val or not isinstance(val, sm.Proxy): continue
                 valaccessor = Trace.get_accessor(val)
-                if not prop.DisableSubTrace:
-                  props = valaccessor.get_properties()
-                  props_to_trace = [k for k in props if self.MTime.GetMTime() < k.get_object().GetMTime()]
-                  if props_to_trace:
+            except Untraceable:
+                continue
+            else:
+                props = valaccessor.get_properties()
+                props_to_trace = [k for k in props if self.MTime.GetMTime() < k.get_object().GetMTime()]
+                if props_to_trace:
                     Trace.Output.append_separated([
                         "# Properties modified on %s" % valaccessor,
                         valaccessor.trace_properties(props_to_trace, in_ctor=False)])
         TraceItem.finalize(self)
 
-        try:
-            self.ScalarOpacityFunctionHack.finalize()
-            del self.ScalarOpacityFunctionHack
-        except AttributeError: pass
-
 class ScalarBarInteraction(NestableTraceItem):
-    """Traces scalar bar interations"""
+    """Traces scalar bar interactions"""
     def __init__(self, proxy, comment=None):
         TraceItem.__init__(self)
         proxy = sm._getPyProxy(proxy)
@@ -1195,11 +1207,23 @@ class SaveScreenshotOrAnimation(TraceItem):
             trace.append("# save screenshot")
         else:
             trace.append("# save animation")
+
+        _filter = ScreenShotHelperProxyFilter()
+
+        # tracing "Format" is handled specially. PLD properties are not traced
+        # in ctor, but we trick it as follows:
+        formatAccessor = ProxyAccessor("temporaryHelperFormat", helper.Format)
+        formatProps = [x for x in formatAccessor.get_properties() if _filter.should_trace_in_ctor(x)]
+        format_txt = formatAccessor.trace_properties(formatProps, in_ctor=True)
+        if format_txt:
+            format_txt = "\n    # %s options\n    %s" % (helper.Format.GetXMLLabel(), format_txt)
+
         trace.append(\
                 helperAccessor.trace_ctor(\
                 "SaveScreenshot" if mode_screenshot else "SaveAnimation",
                     ScreenShotHelperProxyFilter(),
                     ctor_args="'%s', %s" % (filename, ctor_args_1),
+                    ctor_extra_args=format_txt,
                     skip_assignment=True))
         helperAccessor.finalize()
         del helperAccessor
@@ -1453,9 +1477,11 @@ def _create_trace_item_internal(key, args=None, kwargs=None):
     #print ("Hello again", key, args)
     #return A(key)
 
-def _start_trace_internal():
+def _start_trace_internal(preamble=None):
     """**internal** starts tracing. Called by vtkSMTrace::StartTrace()."""
     Trace.reset()
+    if preamble:
+        Trace.Output.append(preamble)
     Trace.Output.append([\
         "#### import the simple module from the paraview",
         "from paraview.simple import *",

@@ -41,7 +41,7 @@ namespace vtkSMDataTypeDomainCache
 {
 static std::map<std::string, vtkSmartPointer<vtkDataObject> > DataObjectMap;
 
-// Only instanciate classes once and use cache after...
+// Only instantiate classes once and use cache after...
 static vtkDataObject* GetDataObjectOfType(const char* classname)
 {
   if (classname == NULL)
@@ -190,6 +190,21 @@ int vtkSMDataTypeDomain::IsInDomain(vtkSMSourceProxy* proxy, int outputport /*=0
     if (classname && classname[0] != '\0')
     {
       vtkWarningMacro("Unable to create instance of class '" << classname << "'.");
+    }
+    return 0;
+  }
+
+  // hypertree grid's dataset API is somewhat broken.
+  // prevent it from going into filters that have not been
+  // whitelisted.
+  if (strcmp(info->GetDataClassName(), "vtkHyperTreeGrid") == 0)
+  {
+    for (unsigned int i = 0; i < numTypes; i++)
+    {
+      if (strcmp(this->GetDataType(i), "vtkHyperTreeGrid") == 0)
+      {
+        return 1;
+      }
     }
     return 0;
   }

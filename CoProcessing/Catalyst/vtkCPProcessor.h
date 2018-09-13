@@ -39,11 +39,11 @@ class vtkMultiProcessController;
 /// 2) Processing (see vtkCPProcessor::ProcessData).
 ///
 /// Configuration step:\n
-/// In the first step the Co-Processor implemntation is called with a
+/// In the first step the Co-Processor implementation is called with a
 /// vtkDataDescription describing the data that the simulation can provide
-/// This gives the Co-Processor implemntation a chance to identify what
+/// This gives the Co-Processor implementation a chance to identify what
 /// (if any) of the available data it will process during this pass. By
-/// default all of the avaible data is selected, so that if the Co-Processor
+/// default all of the available data is selected, so that if the Co-Processor
 /// implementation does nothing it will receive all data during the Processing
 /// step. The Co-Processor implementation should extract what ever meta-data
 /// it will need (or alternatively can save a reference to the DataDescription),
@@ -76,14 +76,16 @@ public:
   virtual void RemoveAllPipelines();
 
   /// Initialize the co-processor. Returns 1 if successful and 0
-  /// otherwise.
   /// otherwise. If Catalyst is built with MPI then Initialize()
   /// can also be called with a specific MPI communicator if
   /// MPI_COMM_WORLD isn't the proper one. Catalyst is initialized
-  /// to use MPI_COMM_WORLD by default.
-  virtual int Initialize();
+  /// to use MPI_COMM_WORLD by default. Both methods have an optional
+  /// workingDirectory argument which will set *WorkingDirectory* so
+  /// that files will be put relative to this directory.
+  virtual int Initialize(const char* workingDirectory = nullptr);
 #ifndef __WRAP__
-  virtual int Initialize(vtkMPICommunicatorOpaqueComm& comm);
+  virtual int Initialize(
+    vtkMPICommunicatorOpaqueComm& comm, const char* workingDirectory = nullptr);
 #endif
 
   /// The Catalyst input field data string array name. This array will
@@ -111,12 +113,24 @@ public:
   /// implementation an opportunity to clean up, before it is destroyed.
   virtual int Finalize();
 
+  /// Get the current working directory for outputting Catalyst files.
+  /// If not set then Catalyst output files will be relative to the
+  /// current working directory. This will not affect where Catalyst
+  /// looks for Python scripts. *WorkingDirectory* gets set through
+  /// the *Initialize()* methods.
+  vtkGetStringMacro(WorkingDirectory);
+
 protected:
   vtkCPProcessor();
   virtual ~vtkCPProcessor();
 
   /// Create a new instance of the InitializationHelper.
   virtual vtkObject* NewInitializationHelper();
+
+  /// Set the current working directory for outputting Catalyst files.
+  /// This is a protected method since simulation code adaptors should
+  /// set this through the *Initialize()* methods.
+  vtkSetStringMacro(WorkingDirectory);
 
 private:
   vtkCPProcessor(const vtkCPProcessor&) = delete;
@@ -125,6 +139,7 @@ private:
   vtkCPProcessorInternals* Internal;
   vtkObject* InitializationHelper;
   static vtkMultiProcessController* Controller;
+  char* WorkingDirectory;
 };
 
 #endif

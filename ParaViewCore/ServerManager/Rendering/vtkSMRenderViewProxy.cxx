@@ -30,6 +30,7 @@
 #include "vtkMultiProcessController.h"
 #include "vtkNew.h"
 #include "vtkObjectFactory.h"
+#include "vtkPVArrayInformation.h"
 #include "vtkPVCompositeDataInformation.h"
 #include "vtkPVDataInformation.h"
 #include "vtkPVLastSelectionInformation.h"
@@ -48,6 +49,7 @@
 #include "vtkSMEnumerationDomain.h"
 #include "vtkSMInputProperty.h"
 #include "vtkSMMaterialLibraryProxy.h"
+#include "vtkSMOutputPort.h"
 #include "vtkSMPVRepresentationProxy.h"
 #include "vtkSMProperty.h"
 #include "vtkSMPropertyHelper.h"
@@ -194,7 +196,7 @@ void vtkSMRenderViewProxy::UpdateLOD()
 bool vtkSMRenderViewProxy::GetNeedsUpdate()
 {
   vtkPVRenderView* view = vtkPVRenderView::SafeDownCast(this->GetClientSideObject());
-  if (view->GetUseInteractiveRenderingForScreenshots())
+  if (view->GetUseInteractiveRenderingForScreenshots() && view->GetUseLODForInteractiveRender())
   {
     return this->NeedsUpdateLOD;
   }
@@ -473,6 +475,27 @@ const char* vtkSMRenderViewProxy::GetRepresentationType(vtkSMSourceProxy* produc
       if (acceptable)
       {
         return representationsToTry[cc];
+      }
+    }
+  }
+
+  // check if the data type is a vtkTable with a single row and column with
+  // a vtkStringArray named "Text". If it is, we render this in a render view
+  // with the value shown in the view.
+  if (vtkSMOutputPort* port = producer->GetOutputPort(outputPort))
+  {
+    if (vtkPVDataInformation* dataInformation = port->GetDataInformation())
+    {
+      if (dataInformation->GetDataSetType() == VTK_TABLE)
+      {
+        if (vtkPVArrayInformation* ai =
+              dataInformation->GetArrayInformation("Text", vtkDataObject::ROW))
+        {
+          if (ai->GetNumberOfComponents() == 1 && ai->GetNumberOfTuples() == 1)
+          {
+            return "TextSourceRepresentation";
+          }
+        }
       }
     }
   }
@@ -853,7 +876,7 @@ static void vtkShrinkSelection(vtkSelection* sel)
 {
   std::map<void*, int> pixelCounts;
   unsigned int numNodes = sel->GetNumberOfNodes();
-  void* choosen = NULL;
+  void* chosen = NULL;
   int maxPixels = -1;
   for (unsigned int cc = 0; cc < numNodes; cc++)
   {
@@ -868,29 +891,29 @@ static void vtkShrinkSelection(vtkSelection* sel)
       if (pixelCounts[source] > maxPixels)
       {
         maxPixels = numPixels;
-        choosen = source;
+        chosen = source;
       }
     }
   }
 
-  std::vector<vtkSmartPointer<vtkSelectionNode> > choosenNodes;
-  if (choosen != NULL)
+  std::vector<vtkSmartPointer<vtkSelectionNode> > chosenNodes;
+  if (chosen != NULL)
   {
     for (unsigned int cc = 0; cc < numNodes; cc++)
     {
       vtkSelectionNode* node = sel->GetNode(cc);
       vtkInformation* properties = node->GetProperties();
       if (properties->Has(vtkSelectionNode::SOURCE()) &&
-        properties->Get(vtkSelectionNode::SOURCE()) == choosen)
+        properties->Get(vtkSelectionNode::SOURCE()) == chosen)
       {
-        choosenNodes.push_back(node);
+        chosenNodes.push_back(node);
       }
     }
   }
   sel->RemoveAllNodes();
-  for (unsigned int cc = 0; cc < choosenNodes.size(); cc++)
+  for (unsigned int cc = 0; cc < chosenNodes.size(); cc++)
   {
-    sel->AddNode(choosenNodes[cc]);
+    sel->AddNode(chosenNodes[cc]);
   }
 }
 }

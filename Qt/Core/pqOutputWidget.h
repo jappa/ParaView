@@ -41,6 +41,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class pqOutputWidget;
 
+namespace OutputWidgetInternals
+{
+class OutputWindow;
+};
+
 Q_DECLARE_METATYPE(QtMsgType)
 /**
  * @class MessageHandler
@@ -137,6 +142,13 @@ public:
   const QString& settingsKey() const;
   //@}
 
+  //@{
+  /**
+   * Set/get the font size in points for the output console text.
+   */
+  void setFontSize(int fontSize);
+  //@}
+
 public slots:
   /**
    * Display a message in the widget. There's generally no need to use this
@@ -179,6 +191,7 @@ private:
 
   class pqInternals;
   QScopedPointer<pqInternals> Internals;
+  friend class OutputWidgetInternals::OutputWindow;
 };
 
 #endif

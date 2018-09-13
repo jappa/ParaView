@@ -1016,7 +1016,7 @@ int vtkGMVReader::RequestData(vtkInformation* vtkNotUsed(request),
                 // name to every component. Try to reduce that possible redundancy by removing
                 // redundant substrings:
                 // * For auto-generated component names strip the trailing vector name
-                // * For explicitely named components, try to remove a leading vector name plus an
+                // * For explicitly named components, try to remove a leading vector name plus an
                 //   underscore - because users tend to follow the pattern from the GMV User's
                 //   Manual which states:
                 //        vectors
@@ -1035,7 +1035,7 @@ int vtkGMVReader::RequestData(vtkInformation* vtkNotUsed(request),
                 }
                 else
                 {
-                  // Try to strip vector name from explicitely named components to avoid redundantly
+                  // Try to strip vector name from explicitly named components to avoid redundantly
                   // named variables
                   pos = componentname.find(vectorname + "_");
                   if (pos != std::string::npos)
@@ -1109,7 +1109,7 @@ int vtkGMVReader::RequestData(vtkInformation* vtkNotUsed(request),
                 // name to every component. Try to reduce that possible redundancy by removing
                 // redundant substrings:
                 // * For auto-generated component names strip the trailing vector name plus the dash
-                // * For explicitely named components, try to remove a leading vector name plus an
+                // * For explicitly named components, try to remove a leading vector name plus an
                 //   underscore - because users tend to follow the pattern from the GMV User's
                 //   Manual which states:
                 //        vectors
@@ -1128,7 +1128,7 @@ int vtkGMVReader::RequestData(vtkInformation* vtkNotUsed(request),
                 }
                 else
                 {
-                  // Try to strip vector name from explicitely named components to avoid redundantly
+                  // Try to strip vector name from explicitly named components to avoid redundantly
                   // named variables
                   pos = componentname.find(vectorname + "_");
                   if (pos != std::string::npos)
@@ -1270,7 +1270,7 @@ int vtkGMVReader::RequestData(vtkInformation* vtkNotUsed(request),
       {
         int flagNameLen = (int)strlen(GMVRead::gmv_data.name1) + 5;
         char* flagName = new char[flagNameLen + 1];
-        strncpy(&flagName[0], (char*)"flag ", 5);
+        strncpy(&flagName[0], (char*)"flag ", 6);
         strcpy(&flagName[5], GMVRead::gmv_data.name1);
         flagName[flagNameLen] = '\0';
 
@@ -1536,7 +1536,7 @@ int vtkGMVReader::RequestData(vtkInformation* vtkNotUsed(request),
               // Find out whether this variable has been selected for reading
               int tracerNameLen = (int)strlen(GMVRead::gmv_data.name1) + 7;
               char* tracerName = new char[tracerNameLen + 1];
-              strncpy(&tracerName[0], (char*)"tracer ", 7);
+              strncpy(&tracerName[0], (char*)"tracer ", 8);
               strcpy(&tracerName[7], GMVRead::gmv_data.name1);
               tracerName[tracerNameLen] = '\0';
 
@@ -2274,7 +2274,7 @@ int vtkGMVReader::RequestInformation(vtkInformation* vtkNotUsed(request),
       {
         int flagNameLen = (int)strlen(GMVRead::gmv_data.name1) + 5;
         char* flagName = new char[flagNameLen + 1];
-        strncpy(&flagName[0], (char*)"flag ", 5);
+        strncpy(&flagName[0], (char*)"flag ", 6);
         strcpy(&flagName[5], GMVRead::gmv_data.name1);
         flagName[flagNameLen] = '\0';
 
@@ -2353,7 +2353,7 @@ int vtkGMVReader::RequestInformation(vtkInformation* vtkNotUsed(request),
             {
               int tracerNameLen = (int)strlen(GMVRead::gmv_data.name1) + 7;
               char* tracerName = new char[tracerNameLen + 1];
-              strncpy(&tracerName[0], (char*)"tracer ", 7);
+              strncpy(&tracerName[0], (char*)"tracer ", 8);
               strcpy(&tracerName[7], GMVRead::gmv_data.name1);
               tracerName[tracerNameLen] = '\0';
               this->PointDataArraySelection->AddArray(tracerName);

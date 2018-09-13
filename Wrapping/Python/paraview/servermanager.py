@@ -201,7 +201,6 @@ class Proxy(object):
         for property in proxy:
             print (property)
 
-
     For advanced users:
     This is a python class that wraps a vtkSMProxy. Makes it easier to
     set/get properties.
@@ -263,11 +262,11 @@ class Proxy(object):
         self.add_attribute('_Proxy__Properties', {})
         self.add_attribute('_Proxy__LastAttrName', None)
         self.add_attribute('SMProxy', None)
-        self.add_attribute('Port', 0)
-
         if 'port' in args:
-            self.Port = args['port']
+            self.add_attribute('Port', args['port'])
             del args['port']
+        else:
+            self.add_attribute('Port', 0)
 
         update = True
         if 'no_update' in args:
@@ -572,7 +571,6 @@ class SourceProxy(Proxy):
     CellData = property(GetCellDataInformation, None, None, "Returns cell data information")
     FieldData = property(GetFieldDataInformation, None, None, "Returns field data information")
 
-
 class ExodusIIReaderProxy(SourceProxy):
     """Special class to define convenience functions for array
     selection."""
@@ -603,7 +601,7 @@ class ViewLayoutProxy(Proxy):
     def SplitViewHorizontal(self, view, fraction=0.5):
         """Split the cell containing the specified view horizontally.
         If no fraction is specified, the frame is split into equal parts.
-        On success returns a positve number that identifying the new cell
+        On success returns a positive number that identifying the new cell
         location that can be used to assign view to, or split further.
         Return -1 on failure."""
         location = self.GetViewLocation(view)
@@ -617,7 +615,7 @@ class ViewLayoutProxy(Proxy):
         """Split the cell containing the specified view horizontally.
         If no view is specified, active view is used.
         If no fraction is specified, the frame is split into equal parts.
-        On success returns a positve number that identifying the new cell
+        On success returns a positive number that identifying the new cell
         location that can be used to assign view to, or split further.
         Return -1 on failure."""
         location = self.GetViewLocation(view)
@@ -932,7 +930,6 @@ class EnumerationProperty(VectorProperty):
     Available = property(GetAvailable, None, None, \
         "This read-only property contains the list of values that can be applied to this property.")
 
-
 class FileNameProperty(VectorProperty):
     """Property to set/get one or more file names.
     This property updates the pipeline information everytime its value changes.
@@ -1108,7 +1105,7 @@ class ArrayListProperty(VectorProperty):
         # so that values passed in will take precedence.
         # This is needed for backward compatibility of the
         # property ElementBlocks for vtkExodusIIReader.
-        # If you attemp to change this, please verify that
+        # If you attempt to change this, please verify that
         # python state files for opening old .ex2 file (<=3.14) still works.
         for array in self.Available:
             if not values.__contains__(array):
@@ -1119,7 +1116,6 @@ class ArrayListProperty(VectorProperty):
             val = self.ConvertValue(values[i])
             fullvalues.append(val)
             fullvalues.append('1')
-
 
         i = 0
         for value in fullvalues:
@@ -1141,14 +1137,12 @@ class ArrayListProperty(VectorProperty):
                 self.__arrays.append(self.GetElement(i))
         return list(self.__arrays)
 
-
 class SubsetInclusionLatticeProperty(ArrayListProperty):
     """This property provides a simpler interface for selecting blocks on a
     property with a `vtkSMSubsetInclusionLatticeDomain`."""
     # currently, there's nothing more here. eventually, we'll add support to
     # forward select/deselect requests to a vtkSubsetInclusionLattice instance.
     pass
-
 
 class ProxyProperty(Property):
     """A ProxyProperty provides access to one or more proxies. You can use
@@ -1217,7 +1211,7 @@ class ProxyProperty(Property):
         return self.SMProperty.GetNumberOfProxies()
 
     def remove(self, proxy):
-        """Removes the first occurence of the proxy from the property."""
+        """Removes the first occurrence of the proxy from the property."""
         self.SMProperty.RemoveProxy(proxy.SMProxy)
         self._UpdateProperty()
 
@@ -1405,7 +1399,6 @@ class InputProperty(ProxyProperty):
             if isinstance(prop, ArraySelectionProperty):
                 prop.UpdateDefault()
 
-
 class DataInformation(object):
     """DataInformation is a contained for meta-data associated with an
     output data.
@@ -1518,7 +1511,6 @@ class FieldDataInformationIterator(object):
         else:
             return ai
     __next__ = next # Python 3.X compatibility
-
 
 class FieldDataInformation(object):
     """Meta-data for a field of an output object (point data, cell data etc...).
@@ -1902,7 +1894,6 @@ class ProxyDefinitionIterator(object):
         """returns attributes from the vtkPVProxyDefinitionIterator."""
         return getattr(self.SMIterator, name)
 
-
 class ProxyIterator(object):
     """Wrapper for a vtkSMProxyIterator class to satisfy the
      python iterator protocol.
@@ -2063,7 +2054,7 @@ def LoadState(filename, connection=None):
             view.GetRenderWindow().SetSize(view.ViewSize[0], \
                                            view.ViewSize[1])
 
-def Connect(ds_host=None, ds_port=11111, rs_host=None, rs_port=22221):
+def Connect(ds_host=None, ds_port=11111, rs_host=None, rs_port=22221, timeout=60):
     """
     Use this function call to create a new session. On success,
     it returns a vtkSMSession object that abstracts the connection.
@@ -2071,7 +2062,7 @@ def Connect(ds_host=None, ds_port=11111, rs_host=None, rs_port=22221):
 
     There are several ways in which this function can be called:
 
-    * When called with no arguments, it creates a new session
+    * When called with no hosts, it creates a new session
       to the built-in server on the client itself.
 
     * When called with ds_host and ds_port arguments, it
@@ -2081,22 +2072,29 @@ def Connect(ds_host=None, ds_port=11111, rs_host=None, rs_port=22221):
     * When called with ds_host, ds_port, rs_host, rs_port, it
       creates a new connection to the data server on ds_host:ds_port and to the
       render server on rs_host: rs_port.
+
+    * All these connection types support a timeout argument in second.
+      Default is 60. 0 means no retry, -1 means infinite retries.
     """
+    ret = True;
     if ds_host == None:
         session = vtkSMSession()
     elif rs_host == None:
         session = vtkSMSessionClient()
-        session.Connect("cs://%s:%d" % (ds_host, ds_port))
+        ret = session.Connect("cs://%s:%d" % (ds_host, ds_port), timeout)
     else:
         session = vtkSMSessionClient()
-        session.Connect("cdsrs://%s:%d/%s:%d" % (ds_host, ds_port, rs_host, rs_port))
-    id = vtkProcessModule.GetProcessModule().RegisterSession(session)
-    connection = GetConnectionFromId(id)
+        ret = session.Connect("cdsrs://%s:%d/%s:%d" % (ds_host, ds_port, rs_host, rs_port), timeout)
+    if ret:
+      id = vtkProcessModule.GetProcessModule().RegisterSession(session)
+      connection = GetConnectionFromId(id)
 
-    # This shouldn't be needed. However, it's needed for old Python scripts that
-    # directly import servermanager.py without simple.py
-    SetActiveConnection(connection)
-    return connection
+      # This shouldn't be needed. However, it's needed for old Python scripts that
+      # directly import servermanager.py without simple.py
+      SetActiveConnection(connection)
+      return connection
+    else:
+      return None
 
 def ReverseConnect(port=11111):
     """
@@ -2262,7 +2260,6 @@ def LoadXML(xmlstring):
     """DEPRECATED. Given a server manager XML as a string, parse and process it."""
     raise RuntimeError ("Deprecated. Use LoadPlugin(...) instead.")
 
-
 def LoadPlugin(filename,  remote=True, connection=None):
     """ Given a filename and a session (optional, otherwise uses
     ActiveConnection), loads a plugin. It then updates the sources,
@@ -2279,13 +2276,12 @@ def LoadPlugin(filename,  remote=True, connection=None):
     else:
         status = plm.LoadLocalPlugin(filename)
 
-    # shouldn't the extension check happend before attempting to load the plugin?
+    # shouldn't the extension check happen before attempting to load the plugin?
     if not status:
         raise RuntimeError ("Problem loading plugin %s" % (filename))
     else:
         # we should never have to call this. The modules should update automatically.
         updateModules(connection.Modules)
-
 
 def Fetch(input, arg1=None, arg2=None, idx=0):
     """
@@ -2372,11 +2368,9 @@ def Fetch(input, arg1=None, arg2=None, idx=0):
     opc.UnRegister(None)
     return opc
 
-def AnimateReader(reader, view, filename=None):
+def AnimateReader(reader, view):
     """This is a utility function that, given a reader and a view
-    animates over all time steps of the reader. If the optional
-    filename is provided, a movie is created (type depends on the
-    extension of the filename."""
+    animates over all time steps of the reader."""
     if not reader:
         raise RuntimeError ("No reader was specified, cannot animate.")
     if not view:
@@ -2398,7 +2392,6 @@ def AnimateReader(reader, view, filename=None):
     if not view in tk.Views:
         tk.Views.append(view)
 
-
     # with 1 view
     scene.ViewModules = [view]
     # Update the reader to get the time information
@@ -2415,18 +2408,7 @@ def AnimateReader(reader, view, filename=None):
     cue.AnimatedProxy = view
     cue.AnimatedPropertyName = "ViewTime"
     scene.Cues = [cue]
-
-    if filename:
-        writer = vtkSMAnimationSceneImageWriter()
-        writer.SetFileName(filename)
-        writer.SetFrameRate(1)
-        writer.SetAnimationScene(scene.SMProxy)
-
-        # Now save the animation.
-        if not writer.Save():
-            raise RuntimeError ("Saving of animation failed!")
-    else:
-        scene.Play()
+    scene.Play()
     return scene
 
 def GetProgressPrintingIsEnabled():
@@ -2443,13 +2425,15 @@ def SetProgressPrintingEnabled(value):
     if value and not GetProgressPrintingIsEnabled():
         if paraview.fromGUI:
             raise RuntimeError("Printing progress in the GUI is not supported.")
-        progressObserverTag = vtkProcessModule.GetProcessModule().AddObserver(\
-            "ProgressEvent", _printProgress)
+        if ActiveConnection and ActiveConnection.Session:
+            progressObserverTag = ActiveConnection.Session.GetProgressHandler().AddObserver(
+                "ProgressEvent", _printProgress)
 
     # If value is false and progress printing is currently on...
     elif GetProgressPrintingIsEnabled():
-        vtkProcessModule.GetProcessModule().RemoveObserver(progressObserverTag)
-        progressObserverTag = None
+        if ActiveConnection and ActiveConnection.Session:
+            ActiveConnection.Session.GetProgressHandler().RemoveObserver(progressObserverTag)
+            progressObserverTag = None
 
 def ToggleProgressPrinting():
     """Turn on/off printing of progress.  See SetProgressPrintingEnabled."""
@@ -2585,14 +2569,8 @@ def _printProgress(caller, event):
     global currentAlgorithm, currentProgress
 
     pm = vtkProcessModule.GetProcessModule()
-    progress = pm.GetLastProgress() / 10
-    # If we got a 100% as the first thing, ignore
-    # This is to get around the fact that some vtk
-    # algorithms report 100% more than once (which is
-    # a bug)
-    if not currentAlgorithm and progress == 10:
-        return
-    alg = pm.GetLastProgressName()
+    progress = caller.GetLastProgress()
+    alg = caller.GetLastProgressText()
     if alg != currentAlgorithm and alg:
         if currentAlgorithm:
             while currentProgress <= 10:
@@ -2753,7 +2731,6 @@ def createModule(groupName, mdl=None):
             mdl.__dict__[pname] = cobj
     return mdl
 
-
 def __determineGroup(proxy):
     """Internal method"""
     if not proxy:
@@ -2851,6 +2828,22 @@ def UnRegister(proxy, **extraArgs):
     else:
         raise RuntimeError ("UnRegistration error.")
     return (registrationGroup, registrationName)
+
+def ResetSession():
+    """Reset the session in the active connection to its initial state."""
+    global ActiveConnection
+
+    # Simulate disconnect
+    pxm = ProxyManager()
+    session = ActiveConnection.Session
+
+    pxm.UnRegisterProxies()
+
+    pm = vtkProcessModule.GetProcessModule()
+    pm.UnRegisterSession(session)
+    id = pm.RegisterSession(session)
+    connection = GetConnectionFromId(id)
+    return connection
 
 def demo1():
     """This simple demonstration creates a sphere, renders it and delivers
@@ -3038,7 +3031,6 @@ def demo4(fname="/Users/berk/Work/ParaViewData/Data/can.ex2"):
     c.Elevation(95)
     return AnimateReader(reader, view)
 
-
 def demo5():
     """ Simple sphere animation"""
     if not ActiveConnection:
@@ -3098,7 +3090,7 @@ def GetAssociationAsString(val):
     raise RuntimeError ("invalid association type '%d'" % val)
 
 def GetAssociationFromString(val):
-    """Returns array association interger value from its string representation"""
+    """Returns array association integer value from its string representation"""
     global ASSOCIATIONS, _LEGACY_ASSOCIATIONS
     val = str(val).upper()
     try:
@@ -3196,7 +3188,6 @@ _pyproxies = {}
 loader = _ModuleLoader()
 sys.meta_path.append(loader)
 
-
 def __exposeActiveModules__():
     """Update servermanager submodules to point to the current
     ActiveConnection.Modules.*"""
@@ -3217,7 +3208,7 @@ def GetConnectionFromId(id):
     return None
 
 def GetConnectionFromSession(session):
-    """Retuns the Connection object corresponding to a vtkSMSession instance."""
+    """Returns the Connection object corresponding to a vtkSMSession instance."""
     global Connections
     for connection in Connections:
         if connection.Session == session:
@@ -3232,7 +3223,6 @@ def GetConnectionFromSession(session):
         Connections.append(c)
         return c
     return None
-
 
 def __connectionCreatedCallback(obj, string):
     """Callback called when a new session is created."""

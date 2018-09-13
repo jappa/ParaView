@@ -26,7 +26,7 @@ vtkPVGridAxes3DActor::vtkPVGridAxes3DActor()
 {
   this->DataScale[0] = this->DataScale[1] = this->DataScale[2] = 1.0;
   this->DataPosition[0] = this->DataPosition[1] = this->DataPosition[2] = 0.0;
-  this->DataBoundsInflateFactor = 0;
+  this->DataBoundsScaleFactor = 1;
 
   this->TransformedBounds[0] = this->TransformedBounds[2] = this->TransformedBounds[4] = -1.0;
   this->TransformedBounds[1] = this->TransformedBounds[3] = this->TransformedBounds[5] = 1.0;
@@ -126,10 +126,18 @@ void vtkPVGridAxes3DActor::UpdateGridBoundsUsingDataBounds()
       this->SetScale(1, 1, 1);
     }
 
-    bbox.Inflate(bbox.GetDiagonalLength() * this->DataBoundsInflateFactor);
-
+    double center[3];
     double bds[6];
     bbox.GetBounds(bds);
+
+    // correct the bounds for the data bounds scale factor
+    for (int i = 0; i < 3; i++)
+    {
+      center[i] = (bds[2 * i] + bds[2 * i + 1]) / 2;
+      bds[2 * i] = center[i] - ((center[i] - bds[2 * i]) * this->DataBoundsScaleFactor);
+      bds[2 * i + 1] = center[i] + ((bds[2 * i + 1] - center[i]) * this->DataBoundsScaleFactor);
+    }
+
     this->SetGridBounds(bds);
   }
   else

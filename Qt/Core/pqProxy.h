@@ -177,6 +177,17 @@ public:
   */
   static pqProxy* findProxyWithHelper(vtkSMProxy* aproxy, QString& key);
 
+  /**
+  * Return whether or not the user has modified the GUI name of the source.
+  * This is needed when reading in a dataset with Catalyst channel information
+  * so that we can make sure that we don't overwrite any QUI name the user
+  * has already modified. The situation where this could happen is if the
+  * user loads a file, changes the GUI name, and then  hits the Apply button.
+  * In this situation we don't want to change the GUI name to the Catalyst
+  * channel name but every other situation we do.
+  */
+  bool userModifiedSMName() { return this->UserModifiedSMName; }
+
 signals:
   /**
   * Fired when the name of the proxy is changed.
@@ -195,7 +206,7 @@ protected:
   * Make this pqProxy take on a new identity. This is following case:
   * Proxy A registered as (gA, nA), then is again registered as (gA, nA2).
   * pqServerManagerModel does not create a new pqProxy for (gA, nA2).
-  * However, if (gA, nA) is now unregistered, the same old instace of pqProxy
+  * However, if (gA, nA) is now unregistered, the same old instance of pqProxy
   * which represented (gA, nA) will now "take on a new identity" and
   * represent proxy (gA, nA2). This method will trigger the
   * nameChanged() signal.
@@ -207,7 +218,7 @@ protected:
   // after the object has been created.
   virtual void initialize();
 
-  // Method used to update the internal structure whithout affecting
+  // Method used to update the internal structure without affecting
   // the ProxyManager proxy registration
   virtual void addInternalHelperProxy(const QString& key, vtkSMProxy*) const;
   virtual void removeInternalHelperProxy(const QString& key, vtkSMProxy*) const;
@@ -223,6 +234,7 @@ private:
   QString SMGroup;
   pqProxyInternal* Internal;
   ModifiedState Modified;
+  bool UserModifiedSMName;
 };
 
 #endif

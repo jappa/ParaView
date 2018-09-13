@@ -11,6 +11,7 @@
           <Entry value="-1" text="Never"/>
           <Entry value="0" text="Grow and update on 'Apply'"/>
           <Entry value="1" text="Grow and update every timestep"/>
+          <Entry value="2" text="Update on 'Apply'"/>
           <Entry value="3" text="Clamp and update every timestep"/>
         </EnumerationDomain>
         <Documentation>
@@ -36,6 +37,16 @@
         </Documentation>
       </IntVectorProperty>
 
+      <IntVectorProperty default_values="0"
+                         name="AnnotationsInitialized"
+                         number_of_elements="1"
+                         panel_visibility="never" >
+        <Documentation>
+         Set to 1 to indicate that the annotations have been initialized.
+        </Documentation>
+        <BooleanDomain name="bool" />
+      </IntVectorProperty>
+
       <IntVectorProperty name="ShowIndexedColorActiveValues"
                          command="SetUseActiveValues"
                          default_values="0"
@@ -49,7 +60,7 @@
           </PropertyWidgetDecorator>
         </Hints>
         <Documentation>
-          When interpretting values as categories, enabling this
+          When interpreting values as categories, enabling this
           option results in the display of only the 'active'
           categorical colors for values in the data range, i.e.,
           values that exist in the source. You may need to click the
@@ -192,6 +203,16 @@
         </Documentation>
       </DoubleVectorProperty>
 
+      <DoubleVectorProperty command="SetNanOpacity"
+                         default_values="1"
+                         name="NanOpacity"
+                         number_of_elements="1" >
+        <DoubleRangeDomain min="0" max="1" name="range" />
+        <Documentation>
+          Set the opacity to use when NaN (not-a-number) is encountered.
+        </Documentation>
+      </DoubleVectorProperty>
+
       <IntVectorProperty command="SetDiscretize"
                          default_values="1"
                          name="Discretize"
@@ -318,6 +339,7 @@
       <PropertyGroup label="Color Mapping Parameters">
         <Property name="ColorSpace" />
         <Property name="NanColor" />
+        <Property name="NanOpacity" />
       </PropertyGroup>
 
       <PropertyGroup label="Color Discretization">
@@ -587,6 +609,9 @@
      <Proxy class="vtkOBBTree"
             name="OBBTree"
             label="OBB Tree Cell Locator"/>
+     <Proxy class="vtkStaticCellLocator"
+            name="StaticCellLocator"
+            label="Static Cell Locator"/>
   </ProxyGroup>
 
   <ProxyGroup name="implicit_functions">
@@ -1066,6 +1091,17 @@
           horizontal or vertical, respectively.
         </Documentation>
       </DoubleVectorProperty>
+      <IntVectorProperty animateable="0"
+                         command="SetReverseLegend"
+                         default_values="0"
+                         name="ReverseLegend"
+                         number_of_elements="1">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          When on, the color bar and all associated ticks and notations will be reversed,
+          from high to low instead of low to high.
+        </Documentation>
+      </IntVectorProperty>
       <IntVectorProperty command="SetAutomaticLabelFormat"
                          default_values="1"
                          name="AutomaticLabelFormat"
@@ -1819,19 +1855,18 @@
         </Hints>
       </DoubleVectorProperty>
 
-      <DoubleVectorProperty name="DataBoundsInflateFactor"
-                            command="SetDataBoundsInflateFactor"
+      <DoubleVectorProperty name="DataBoundsScaleFactor"
+                            command="SetDataBoundsScaleFactor"
                             number_of_elements="1"
-                            default_values="0.0008"
+                            default_values="1.0008"
                             panel_visibility="advanced">
-        <DoubleRangeDomain name="range" min="0" max="1"/>
+        <DoubleRangeDomain name="range" min="0" max="2"/>
         <Documentation>
-          After the data bounds have been computed, this property enables to inflate the
+          After the data bounds have been computed, this property enables to scale the
           bounds used to generate the axes grid, so it will be slightly larger than the
-          data bounds. It inflates the axes grid bounds using the diagonal length of the
-          bounding box multiplied by this factor.
+          data bounds.
           Data bounds are not modified, only the aspect of the AxesGrid is modified.
-          The default value (0.0008) ensures that there is no concident lines drawn when
+          The default value (1.0008) ensures that there is no concident lines drawn when
           zooming close enough to the model.
         </Documentation>
         <Hints>
@@ -1846,7 +1881,7 @@
       <PropertyGroup label="Data Transform">
         <Property name="DataScale" />
         <Property name="DataPosition" />
-        <Property name="DataBoundsInflateFactor" />
+        <Property name="DataBoundsScaleFactor" />
       </PropertyGroup>
 
       <DoubleVectorProperty name="ModelTransformMatrix"
@@ -2385,6 +2420,11 @@
                          name="RenameDirectory">
         <SimpleIntInformationHelper />
       </IntVectorProperty>
+      <IntVectorProperty command="IsDirectory"
+                         information_only="1"
+                         name="IsDirectory">
+        <SimpleIntInformationHelper />
+      </IntVectorProperty>
       <IntVectorProperty command="GetActiveFileIsReadable"
                          information_only="1"
                          name="ActiveFileIsReadable">
@@ -2428,7 +2468,6 @@
                             default_values="0"
                             name="Time"
                             number_of_elements="1"
-                            precision="17"
                             state_ignored="1">
         <!-- state-ignored simply makes this property not be saved in the UndoRedo state -->
         <DoubleRangeDomain name="range" />
@@ -2444,7 +2483,6 @@
                             information_only="1"
                             name="TimeRange"
                             number_of_elements="2"
-                            precision="17"
                             state_ignored="1">
         <!-- state-ignored simply makes this property not be saved in the UndoRedo state -->
         <Documentation>This is the time range. It's possible that there are no
@@ -2484,7 +2522,7 @@
                      name="SuppressedTimeSources"
                      remove_command="RemoveSuppressedTimeSource"
                      repeatable="1">
-        <Documentation>List of proxies that are to supressed i.e their times
+        <Documentation>List of proxies that are to suppressed i.e their times
           to be ignored.
         </Documentation>
       </ProxyProperty>
@@ -2668,7 +2706,7 @@
            processes="client|renderserver">
       <Documentation>This proxy is useful for changing global mapper settings
       such as the coincident topology resolution setting on all rendering
-      proceses.</Documentation>
+      processes.</Documentation>
       <IntVectorProperty command="SetResolveCoincidentTopology"
                          default_values="none"
                          name="Mode"
@@ -2736,7 +2774,7 @@
     </Proxy>
     <ViewLayoutProxy name="ViewLayout"
                      processes="client">
-      <Documentation>Proxy used to manage layout for mutliple views.</Documentation>
+      <Documentation>Proxy used to manage layout for multiple views.</Documentation>
       <IntVectorProperty name="PreviewMode"
         number_of_elements="2"
         default_values="0 0">
@@ -2765,7 +2803,7 @@
     <Proxy class="vtkViewLayout"
            name="InternalViewLayoutHelper"
            processes="renderserver">
-      <Documentation>Proxy used to manage layout for mutliple
+      <Documentation>Proxy used to manage layout for multiple
       views.</Documentation>
     </Proxy>
     <Proxy class="vtkPVRayCastPickingHelper"
@@ -2804,6 +2842,35 @@
         <Documentation>The selection that is used to reduced the
         input.</Documentation>
       </ProxyProperty>
+    </Proxy>
+    <!-- ================================================================= -->
+    <Proxy name="CatalystOptions">
+      <Documentation>Common XML for Catalyst Specific Properties</Documentation>
+      <IntVectorProperty name="WriteFrequency"
+                       label="Write Frequency"
+                       default_values="1"
+                       number_of_elements="1">
+        <Documentation>Set how often Catalyst runs will export this data product. Zero is OK and means only when output is forced by the simulation.
+        </Documentation>
+        <IntRangeDomain min="0"
+                        name="range" />
+      </IntVectorProperty>
+      <StringVectorProperty name="CatalystFilePattern"
+                          label="File Pattern"
+                          default_values="filename_%t.ext"
+                          number_of_elements="1">
+        <Documentation>Set the filename pattern Catalyst runs will use to export this data product.
+        </Documentation>
+      </StringVectorProperty>
+      <IntVectorProperty name="CatalystFitToScreen"
+                       label="Fit To Screen"
+                       default_values="0"
+                       number_of_elements="1">
+        <Documentation>Causes Catalyst to reset the camera with each screenshot to keep all objects in view.
+        </Documentation>
+        <BooleanDomain name="bool" />
+      </IntVectorProperty>
+
     </Proxy>
     <!-- End of group "misc" -->
   </ProxyGroup>
@@ -2981,6 +3048,20 @@
         <ExporterFactory extensions="x3db" />
       </Hints>
     </RenderViewExporterProxy>
+    <RenderViewExporterProxy class="vtkSingleVTPExporter"
+                             name="SingleExporter">
+      <Documentation>Exporter to export a single render view to a vtp
+      file and texture.</Documentation>
+      <StringVectorProperty command="SetFileName"
+                            name="FileName"
+                            panel_visibility="never"
+                            number_of_elements="1">
+        <Documentation>Name of the file to be written.</Documentation>
+      </StringVectorProperty>
+      <Hints>
+        <ExporterFactory extensions="vtp" />
+      </Hints>
+    </RenderViewExporterProxy>
     <RenderViewExporterProxy class="vtkVRMLExporter"
                              name="VRMLExporter">
       <Documentation>Exporter to export a single render view to an VRML
@@ -3007,12 +3088,6 @@
                             number_of_elements="1">
         <Documentation>Name of the file to be written.</Documentation>
       </StringVectorProperty>
-      <IntVectorProperty command="SetFilterColumnsByVisibility"
-                         default_values="0"
-                         name="FilterColumnsByVisibility"
-                         number_of_elements="1">
-        <BooleanDomain name="bool" />
-      </IntVectorProperty>
       <Hints>
         <ExporterFactory extensions="csv tsv txt" />
       </Hints>
@@ -3585,6 +3660,105 @@
       <Property name="LiveChanged" command="LiveChanged" />
 
     </LiveInsituLinkProxy>
+
+    <Proxy name="CatalystGlobalOptions">
+      <Documentation>
+        A proxy used to maintain global Catalyst state. This, combined with the pipeline shape and a choice of writers and screenshots define what Catalyst will do with and produce from the data that the simulation gives to it.
+      </Documentation>
+
+      <IntVectorProperty name="EnableLive"
+                         label="Enable Live Connections"
+                         default_values="0"
+                         number_of_elements="1">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Makes the generated Catalyst Script check for Live connections.
+        </Documentation>
+      </IntVectorProperty>
+
+      <IntVectorProperty name="LiveFrequency"
+                         label="Live Frequency"
+                         default_values="1"
+                         number_of_elements="1"
+                         panel_visibility="advanced">
+        <IntRangeDomain name="range" min="1" />
+        <Documentation>
+          Catalyst will update live connections only every N'th timestep.
+        </Documentation>
+      </IntVectorProperty>
+
+      <StringVectorProperty name="RootDirectory"
+                         number_of_elements="1"
+                         default_values="">
+        <Documentation>
+          Defines a top level directory where Catalyst output files are placed under.
+        </Documentation>
+      </StringVectorProperty>
+
+      <IntVectorProperty name="FileNamePadding"
+                         label="File Padding"
+                         default_values="0"
+                         number_of_elements="1">
+        <IntRangeDomain name="range" min="0" max="16"/>
+        <Documentation>
+          Pads numerical filenames with leading zeros to be a consistent width.
+        </Documentation>
+      </IntVectorProperty>
+
+      <IntVectorProperty name="RequestSpecificArrays"
+                         default_values="0"
+                         number_of_elements="1"
+                         panel_visibility="advanced">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Tells Catalyst to ask for only those arrays that are currently enabled on the source rather than all of them.
+        </Documentation>
+      </IntVectorProperty>
+
+      <IntVectorProperty name="WriteStart"
+                         label="Write Start"
+                         default_values="0"
+                         number_of_elements="1"
+                         panel_visibility="advanced">
+        <IntRangeDomain name="range" min="0" />
+        <Documentation>
+          Catalyst will skip this many startup cycles (possibly excepting ForceFirstOutput) before starting to write files.
+        </Documentation>
+      </IntVectorProperty>
+
+      <IntVectorProperty name="ForceFirstOutput"
+                         default_values="0"
+                         number_of_elements="1"
+                         panel_visibility="advanced">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Tells Catalyst to always dump the first timestep it gets because it may take a long time to wait for WriteStart iterations.
+        </Documentation>
+      </IntVectorProperty>
+
+      <IntVectorProperty name="RescaleToDataRange"
+                         label="Rescale to Data Range"
+                         default_values="0"
+                         number_of_elements="1"
+                         panel_visibility="advanced">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Adjusts the lookup table dynamically as the simulation progresses.
+        </Documentation>
+      </IntVectorProperty>
+
+      <IntVectorProperty name="SaveDTable"
+                         label="Save Cinema D Table"
+                         default_values="0"
+                         number_of_elements="1"
+                         panel_visibility="advanced">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Creates a Cinema table that indexes all output files.
+        </Documentation>
+      </IntVectorProperty>
+
+    </Proxy>
   </ProxyGroup>
 
   <!-- Catalyst client only proxies, used to generate a coprocessing script
@@ -4017,6 +4191,48 @@
       </Hints>
       <!-- End of ExodusIIWriter -->
     </SourceProxy>
+
+    <SourceProxy name="HyperTreeGridWriter" class="vtkPVNullSource"
+      label="Parallel HyperTreeGrid Writer">
+      <InputProperty name="Input">
+          <ProxyGroupDomain name="groups">
+            <Group name="sources" />
+            <Group name="filters" />
+          </ProxyGroupDomain>
+          <DataTypeDomain name="input_type">
+            <DataType value="vtkHyperTreeGrid" />
+          </DataTypeDomain>
+          <Documentation>
+            The input.
+          </Documentation>
+      </InputProperty>
+
+      <StringVectorProperty name="FileName"
+        number_of_elements="1"
+        default_values="filename_%t.htg">
+     </StringVectorProperty>
+
+      <IntVectorProperty name="WriteFrequency"
+        number_of_elements="1"
+        default_values="1">
+        <IntRangeDomain name="range" min="1" />
+      </IntVectorProperty>
+
+      <IntVectorProperty name="PaddingAmount"
+        number_of_elements="1"
+        default_values="0">
+        <IntRangeDomain name="range" min="0" />
+      </IntVectorProperty>
+
+     <Hints>
+      <!-- TODO: this doesn't work yet -->
+      <PipelineIcon name=":pqComponents/pqSave32.png" />
+
+      <!-- This will help us when exporting the script state -->
+      <WriterProxy group="writers" name="HyperTreeGridWriter" />
+     </Hints>
+     <!-- End of HyperTreeGridWriter -->
+    </SourceProxy>
   </ProxyGroup>
 
   <ProxyGroup name="pythontracing">
@@ -4126,8 +4342,179 @@
     </Proxy>
   </ProxyGroup>
 
+  <ProxyGroup name="screenshot_writers">
+    <Documentation>
+      This group includes all writers which can be used to write screenshots in ParaView.
+    </Documentation>
+
+    <Proxy name="PNG" class="vtkPNGWriter" processes="client">
+      <Documentation>
+        Writer for saving screenshots as PNG files.
+      </Documentation>
+      <IntVectorProperty name="CompressionLevel"
+        command="SetCompressionLevel"
+        number_of_elements="1"
+        default_values="5">
+        <Documentation>
+          Specify the *zlib* compression level. **0** is no compression, while **9** is
+          maximum compression.
+        </Documentation>
+        <EnumerationDomain name="enum">
+          <Entry text="0" value="0" info="no compression" />
+          <Entry text="1" value="1" />
+          <Entry text="2" value="2" />
+          <Entry text="3" value="3" />
+          <Entry text="4" value="4" />
+          <Entry text="5" value="5" />
+          <Entry text="6" value="6" />
+          <Entry text="7" value="7" />
+          <Entry text="8" value="8" />
+          <Entry text="9" value="9" info="Maximum compression" />
+        </EnumerationDomain>
+      </IntVectorProperty>
+      <Hints>
+        <FormatOptions extensions="png"
+          file_description="PNG images" />
+      </Hints>
+    </Proxy>
+
+    <Proxy name="JPEG" class="vtkJPEGWriter" processes="client">
+      <Documentation>
+        Writer for saving screenshots as JPEG files.
+      </Documentation>
+      <IntVectorProperty name="Quality"
+        command="SetQuality"
+        number_of_elements="1"
+        default_values="95">
+        <Documentation>
+          Specify the JPEG compression quality. **O** is low quality (maximum compression)
+          and **100** is high quality (least compression).
+        </Documentation>
+        <IntRangeDomain name="range" min="0" max="100" />
+      </IntVectorProperty>
+      <IntVectorProperty name="Progressive"
+        command="SetProgressive"
+        number_of_elements="1"
+        default_values="1">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Save progressive JPEG.
+        </Documentation>
+      </IntVectorProperty>
+      <Hints>
+        <FormatOptions extensions="jpeg jpg"
+          file_description="JPEG images" />
+      </Hints>
+    </Proxy>
+
+    <Proxy name="TIFF" class="vtkTIFFWriter" processes="client">
+      <Documentation>
+        Writer for saving screenshots as TIFF files.
+      </Documentation>
+      <IntVectorProperty name="Compression"
+        command="SetCompression"
+        number_of_elements="1"
+        default_values="1">
+        <Documentation>
+          Specify compression type.
+        </Documentation>
+        <EnumerationDomain name="enum">
+          <Entry text="None" value="0" />
+          <Entry text="PackBits" value="1" />
+          <Entry text="Deflate" value="3" />
+          <!--
+               JPEG is disabled since it raised errors about color space when
+               using it.
+
+               LZW is disabled since its not available (as per docs in vtkTIFFWriter
+          -->
+        </EnumerationDomain>
+      </IntVectorProperty>
+      <Hints>
+        <FormatOptions extensions="tiff tif"
+          file_description="TIFF images" />
+      </Hints>
+    </Proxy>
+
+    <Proxy name="BMP" class="vtkBMPWriter" processes="client">
+      <Documentation>
+        Writer for saving screenshots as BMP files.
+      </Documentation>
+      <Hints>
+        <FormatOptions extensions="bmp"
+          file_description="Bitmap images" />
+      </Hints>
+    </Proxy>
+
+    <Proxy name="CDB" processes="client">
+      <Documentation>
+        Global setup for Cinema Image Database output.
+      </Documentation>
+      <IntVectorProperty name="Deferred Rendering"
+        number_of_elements="1"
+        default_values="0">
+        <Documentation>
+          Deferred rendering cabability level of this database. None means that static images are created at each viewpoint (aka 'SpecA'). Composeable (aka 'SpecC') adds ability to hide/show individual objects. Recolorable adds colormap editability.
+        </Documentation>
+        <EnumerationDomain name="enum">
+          <Entry text="None" value="0" />
+          <Entry text="Composable" value="1" />
+          <Entry text="Composable+Recolorable" value="2" />
+        </EnumerationDomain>
+      </IntVectorProperty>
+      <IntVectorProperty name="Camera Model"
+        number_of_elements="1"
+        default_values="0">
+        <Documentation>
+          Specify camera capability level for this database. Static means the camera is fixed, phi-theta is an inward facing rectilinear sampling of the sphere, the pose cameras sparsely sample and maintain an orientation matrix.
+        </Documentation>
+        <EnumerationDomain name="enum">
+          <Entry text="Static" value="0" />
+          <Entry text="Phi-Theta" value="1" />
+          <Entry text="Inward Pose" value="2" />
+          <Entry text="Outward Pose" value="3" />
+        </EnumerationDomain>
+      </IntVectorProperty>
+      <StringVectorProperty name="Track Object"
+        number_of_elements="1"
+        default_values="None">
+        <Documentation>
+          Name of a pipeline object to orient the camera with. Only meaningful for Inward and Outward Pose Cameras.
+        </Documentation>
+      </StringVectorProperty>
+      <IntVectorProperty name="Camera Phi Divisions"
+        number_of_elements="1"
+        default_values="12">
+        <Documentation>
+          Specify number of longitudinal divisions. Only meaningful for Phi-Theta and Pose Cameras.
+        </Documentation>
+        <IntRangeDomain name="range" min="1" max="64" />
+      </IntVectorProperty>
+      <IntVectorProperty name="Camera Theta Divisions"
+        number_of_elements="1"
+        default_values="7">
+        <Documentation>
+          Specify number of latitudinal divisions. Only meaningful for Phi-Theta and Pose Cameras.
+        </Documentation>
+        <IntRangeDomain name="range" min="1" max="32" />
+      </IntVectorProperty>
+      <IntVectorProperty name="Camera Roll Divisions"
+        number_of_elements="1"
+        default_values="1">
+        <Documentation>
+          Specify number of roll divisions. Only meaningful for Inward and Outward Pose Cameras.
+        </Documentation>
+        <IntRangeDomain name="range" min="1" max="64" />
+      </IntVectorProperty>
+      <Hints>
+        <FormatOptions extensions="cdb"
+          file_description="Cinema Image Exports" />
+      </Hints>
+    </Proxy>
+  </ProxyGroup>
+
   <ProxyGroup name="misc">
-    <SaveScreenshotProxy name="SaveScreenshot" processes="client">
+    <SaveScreenshotProxy name="SaveScreenshotBase" processes="client">
       <Documentation>
         Proxy used to save screenshots from view(s) or layouts.
       </Documentation>
@@ -4247,7 +4634,25 @@
            Set whether to use a transparent background.
         </Documentation>
       </IntVectorProperty>
+    </SaveScreenshotProxy>
 
+    <SaveScreenshotProxy name="SaveScreenshot" processes="client"
+      label="Save Screenshot"
+      base_proxygroup="misc"
+      base_proxyname="SaveScreenshotBase">
+      <Documentation>
+        Proxy used to save screenshots from view(s) or layouts.
+      </Documentation>
+      <ProxyProperty name="Format">
+        <ProxyListDomain name="proxy_list">
+          <Group name="screenshot_writers" />
+        </ProxyListDomain>
+        <Hints>
+          <ProxySelectionWidget enabled="0" />
+        </Hints>
+      </ProxyProperty>
+
+      <!-- FIXME:: deprecated
       <IntVectorProperty name="ImageQuality"
         number_of_elements="1"
         default_values="100"
@@ -4258,6 +4663,7 @@
           **0** - low quality, **100** - high quality.
         </Documentation>
       </IntVectorProperty>
+      -->
 
       <PropertyGroup label="Size and Scaling">
         <Property name="SaveAllViews" />
@@ -4276,9 +4682,22 @@
         <Property name="TransparentBackground" />
       </PropertyGroup>
 
-      <PropertyGroup label="Compression Options">
-        <Property name="ImageQuality" />
+      <PropertyGroup label="Image Options">
+        <Property name="Format" />
       </PropertyGroup>
+
+      <SubProxy>
+        <Proxy name="CatalystOptions"
+               proxygroup="misc"
+               proxyname="CatalystOptions"></Proxy>
+        <ExposedProperties>
+           <PropertyGroup label="Catalyst Options">
+             <Property name="WriteFrequency" />
+             <Property name="CatalystFilePattern" />
+             <Property name="CatalystFitToScreen" />
+           </PropertyGroup>
+        </ExposedProperties>
+      </SubProxy>
 
     </SaveScreenshotProxy>
   </ProxyGroup>

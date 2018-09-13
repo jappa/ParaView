@@ -30,6 +30,7 @@
 #include "vtkSMCoreUtilities.h"
 #include "vtkSMDeserializerProtobuf.h"
 #include "vtkSMDocumentation.h"
+#include "vtkSMExportProxyDepot.h"
 #include "vtkSMGlobalPropertiesLinkUndoElement.h"
 #include "vtkSMPipelineState.h"
 #include "vtkSMPropertyIterator.h"
@@ -158,6 +159,9 @@ vtkSMSessionProxyManager::vtkSMSessionProxyManager(vtkSMSession* session)
   this->PipelineState = vtkSMPipelineState::New();
   this->PipelineState->SetSession(this->Session);
 
+  this->ExportDepot = vtkSMExportProxyDepot::New();
+  this->ExportDepot->Session = this;
+
   // setup event forwarder so that it forwards all events fired by this class via
   // the global proxy manager.
   vtkNew<vtkSMProxyManagerForwarder> forwarder;
@@ -181,6 +185,9 @@ vtkSMSessionProxyManager::~vtkSMSessionProxyManager()
 
   this->PipelineState->Delete();
   this->PipelineState = NULL;
+
+  this->ExportDepot->Delete();
+  this->ExportDepot = nullptr;
 }
 
 //----------------------------------------------------------------------------
@@ -790,7 +797,7 @@ void vtkSMSessionProxyManager::UnRegisterProxy(const char* name)
     iter++;
   }
 
-  // Push new state only if changed occured
+  // Push new state only if changed occurred
   if (entriesToRemove.size() > 0)
   {
     this->TriggerStateUpdate();
@@ -812,7 +819,7 @@ void vtkSMSessionProxyManager::UnRegisterProxy(vtkSMProxy* proxy)
     iter++;
   }
 
-  // Push new state only if changed occured
+  // Push new state only if changed occurred
   if (tuplesToRemove.size() > 0)
   {
     this->TriggerStateUpdate();
@@ -1681,7 +1688,7 @@ void vtkSMSessionProxyManager::LoadState(const vtkSMMessage* msg, vtkSMProxyLoca
       object->Delete();
     }
   }
-  // Remove Link that have disapeared...
+  // Remove Link that have disappeared...
   for (int i = 0; i < this->GetNumberOfLinks(); i++)
   {
     const char* currentLinkName = this->GetLinkName(i);

@@ -29,7 +29,7 @@ vtkPVRampKeyFrame::~vtkPVRampKeyFrame()
 }
 
 //----------------------------------------------------------------------------
-// remeber that currenttime is 0 at the KeyTime of this key frame
+// remember that currenttime is 0 at the KeyTime of this key frame
 // and 1 and the KeyTime of the next key frame. Hence,
 // currenttime belongs to the interval [0,1).
 void vtkPVRampKeyFrame::UpdateValue(double currenttime, vtkPVAnimationCue* cue, vtkPVKeyFrame* next)
@@ -55,7 +55,7 @@ void vtkPVRampKeyFrame::UpdateValue(double currenttime, vtkPVAnimationCue* cue, 
     unsigned int end_novalues = next->GetNumberOfKeyValues();
     unsigned int min = (start_novalues < end_novalues) ? start_novalues : end_novalues;
 
-    // interpolate comman indices.
+    // interpolate common indices.
     for (i = 0; i < min; i++)
     {
       double vmax = next->GetKeyValue(i);

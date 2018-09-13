@@ -213,6 +213,7 @@ public:
     this->BuildFallback();
     return this->Fallback->SetVoidArray(p, id, i);
   }
+  void SetArrayFreeFunction(void (*)(void*)) override {}
 
   // Description:
   // Since we don't allocate, this does nothing
@@ -267,7 +268,7 @@ protected:
   int TupleSize;
 
   void BuildFallback();
-  // A writeable version of this array, delegated.
+  // A writable version of this array, delegated.
   vtkDoubleArray* Fallback;
 
 private:

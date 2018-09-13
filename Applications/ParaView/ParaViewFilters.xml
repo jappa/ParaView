@@ -8,6 +8,7 @@
     <Proxy group="filters" name="Threshold" icon=":/pqWidgets/Icons/pqThreshold24.png"/>
     <Proxy group="filters" name="ExtractGrid" icon=":/pqWidgets/Icons/pqExtractGrid24.png"/>
     <Proxy group="filters" name="Glyph" icon=":/pqWidgets/Icons/pqGlyph24.png"/>
+    <Proxy group="filters" name="NewGlyph" icon=":/pqWidgets/Icons/pqGlyph24.png"/>
     <Proxy group="filters" name="StreamTracer" icon=":/pqWidgets/Icons/pqStreamTracer24.png"/>
     <Proxy group="filters" name="WarpVector" icon=":/pqWidgets/Icons/pqWarp24.png"/>
     <Proxy group="filters" name="GroupDataSets" icon=":/pqWidgets/Icons/pqGroup24.png"/>
@@ -49,6 +50,19 @@
     <Proxy group="filters" name="ExtractBagPlots"
             icon=":/pqWidgets/Icons/pqFunctionalBagChart16.png" omit_from_toolbar="1"/>
     <Proxy group="filters" name="ExtractLocation" omit_from_toolbar="1" />
+    <Proxy group="filters" name="PlotDataOverTime" omit_from_toolbar="1" />
+  </Category>
+
+  <Category name="Hyper Tree Grid" menu_label="&amp;Hyper Tree Grid">
+    <Proxy group="filters" name="HyperTreeGridAxisClip" />
+    <Proxy group="filters" name="HyperTreeGridAxisCut" />
+    <Proxy group="filters" name="HyperTreeGridAxisReflection" />
+    <Proxy group="filters" name="HyperTreeGridCellCenters" />
+    <Proxy group="filters" name="HyperTreeGridContour" />
+    <Proxy group="filters" name="HyperTreeGridDepthLimiter" />
+    <Proxy group="filters" name="HyperTreeGridSliceWithPlane" />
+    <Proxy group="filters" name="HyperTreeGridThreshold" />
+    <Proxy group="filters" name="HyperTreeGridToUnstructuredGrid" />
   </Category>
 
   <Category name="Statistics" menu_label="&amp;Statistics">
@@ -134,6 +148,13 @@
     <Proxy group="filters" name="SPHDatasetInterpolator" />
   </Category>
 
+  <Category name="Chemistry" menu_label="Chemistry">
+    <Proxy group="filters" name="AppendMolecule"/>
+    <Proxy group="filters" name="ComputeMoleculeBonds"/>
+    <Proxy group="filters" name="MoleculeToLines"/>
+    <Proxy group="filters" name="PointSetToMolecule"/>
+  </Category>
+
   <Proxy group="filters" name="AggregateDataSet" />
   <Proxy group="filters" name="AppendArcLength" />
   <Proxy group="filters" name="AddFieldArrays" />
@@ -169,24 +190,29 @@
   <Proxy group="filters" name="DataSetRegionSurfaceFilter" />
   <Proxy group="filters" name="DataSetTriangleFilter" />
   <Proxy group="filters" name="DecimatePro" />
+  <Proxy group="filters" name="DecimatePolyline" />
   <Proxy group="filters" name="Delaunay2D" />
   <Proxy group="filters" name="Delaunay3D" />
+  <Proxy group="filters" name="DistributePoints"/>
   <Proxy group="filters" name="ElevationFilter" />
   <Proxy group="filters" name="EvenlySpacedStreamlines2D" />
   <Proxy group="filters" name="ExtractBlock" />
   <Proxy group="filters" name="ExtractComponent" />
   <Proxy group="filters" name="ExtractEdges" />
+  <Proxy group="filters" name="ExtractEnclosedPoints" />
   <Proxy group="filters" name="ExtractGeometry" />
   <Proxy group="filters" name="ExtractGrid" />
   <Proxy group="filters" name="ExtractHistogram" />
   <Proxy group="filters" name="ExtractSelection" />
   <Proxy group="filters" name="ExtractSelectionOverTime" />
+  <Proxy group="filters" name="PlotDataOverTime" />
   <Proxy group="filters" name="FeatureEdges" />
   <Proxy group="filters" name="FFTSelectionOverTime" />
   <Proxy group="filters" name="GaussianSplatter"/>
   <Proxy group="filters" name="GenerateIdScalars"/>
   <Proxy group="filters" name="GhostCellsGenerator" />
   <Proxy group="filters" name="Glyph" />
+  <Proxy group="filters" name="NewGlyph" />
   <Proxy group="filters" name="GlyphWithCustomSource" />
   <Proxy group="filters" name="Gradient" />
   <Proxy group="filters" name="GridConnectivity" />
@@ -254,6 +280,7 @@
   <Proxy group="filters" name="TriangleFilter" />
   <Proxy group="filters" name="TubeFilter" />
   <Proxy group="filters" name="UnstructuredGradient" />
+  <Proxy group="filters" name="ValidateCells" />
   <Proxy group="filters" name="WarpScalar" />
   <Proxy group="filters" name="WarpVector" />
   <Proxy group="filters" name="YoungsMaterialInterface"/>

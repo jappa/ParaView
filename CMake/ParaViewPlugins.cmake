@@ -123,7 +123,7 @@ MACRO(ADD_SERVER_MANAGER_EXTENSION OUTSRCS Name Version XMLFile)
   IF(HDRS)
     include(vtkWrapClientServer)
 
-    vtk_wrap_hierarchy(${Name} ${VTK_MODULES_DIR}
+    vtk_wrap_hierarchy(${Name} ${CMAKE_CURRENT_BINARY_DIR}
       "${ARGN}")
 
     # Plugins should not use unified bindings. The problem arises because the
@@ -319,16 +319,23 @@ ENDMACRO()
 #   add_pqproxy(OUTIFACES OUTSRCS
 #     TYPE <pqProxy subclass name>
 #     XML_GROUP <xml group used to identify the vtkSMProxy>
-#     XML_NAME <xml name used to indentify the vtkSMProxy>
+#     XML_NAME <xml name used to identify the vtkSMProxy>
 #     ...)
-# The TYPE, XML_GROUP, and XML_NAME can be repeated to register multiple types
-# of pqProxy subclasses or reuse the same pqProxy for multiple proxy types.
+# or
+#   add_pqproxy(OUTIFACES OUTSRCS
+#     TYPE <pqProxy subclass name>
+#     XML_GROUP <xml group used to identify the vtkSMProxy>
+#     XML_NAME_REGEX <xml name regex used to identify the vtkSMProxy>
+#     ...)
+# The TYPE, XML_GROUP, XML_NAME and XML_NAME_REGEX can be repeated to register
+# multiple types of pqProxy subclasses or reuse the same pqProxy for multiple
+# proxy types.
 macro(add_pqproxy OUTIFACES OUTSRCS)
   set (arg_types)
   set (_doing)
   set (_active_index)
   foreach (arg ${ARGN})
-    if ((NOT _doing) AND ("${arg}" MATCHES "^(TYPE|XML_GROUP|XML_NAME)$"))
+    if ((NOT _doing) AND ("${arg}" MATCHES "^(TYPE|XML_GROUP|XML_NAME|XML_NAME_REGEX)$"))
       set (_doing "${arg}")
     elseif (_doing STREQUAL "TYPE")
       list(APPEND arg_types "${arg}")
@@ -343,6 +350,9 @@ macro(add_pqproxy OUTIFACES OUTSRCS)
     elseif (_doing STREQUAL "XML_NAME")
       set (_type_${_active_index}_xmlname "${arg}")
       set (_doing)
+    elseif (_doing STREQUAL "XML_NAME_REGEX")
+      set (_type_${_active_index}_xmlname_root "${arg}")
+      set (_doing)
     else()
       set (_doing)
     endif()
@@ -356,13 +366,23 @@ macro(add_pqproxy OUTIFACES OUTSRCS)
     list(GET arg_types ${index} arg_type)
     set (arg_xml_group "${_type_${index}_xmlgroup}")
     set (arg_xml_name "${_type_${index}_xmlname}")
-    set (ARG_INCLUDES "${ARG_INCLUDES}#include\"${arg_type}.h\"\n")
+    set (arg_xml_name_regex "${_type_${index}_xmlname_regex}")
+    set (ARG_INCLUDES "${ARG_INCLUDES}#include \"${arg_type}.h\"\n")
+    if (arg_xml_name_regex)
+    set (ARG_BODY "${ARG_BODY}
+    if (QString(\"${arg_xml_group}\") == proxy->GetXMLGroup() &&
+        QString(proxy->GetXMLName()).contains(QRegularExpression(\"${arg_xml_name_regex}\")))
+        {
+        return new ${arg_type}(regGroup, regName, proxy, server, NULL);
+        }")
+    else ()
     set (ARG_BODY "${ARG_BODY}
     if (QString(\"${arg_xml_group}\") == proxy->GetXMLGroup() &&
         QString(\"${arg_xml_name}\") == proxy->GetXMLName())
         {
         return new ${arg_type}(regGroup, regName, proxy, server, NULL);
         }")
+    endif()
   endforeach()
 
   if (ARG_INCLUDES AND ARG_BODY)
@@ -707,7 +727,7 @@ ENDMACRO()
 #  PYTHON_MODULES allows you to embed python sources as modules
 #  GUI_INTERFACES is to specify which GUI plugin interfaces were implemented
 #  GUI_RESOURCES is to specify qrc files
-#  GUI_RESOURCE_FILES warns about removed behavoir
+#  GUI_RESOURCE_FILES warns about removed behavior
 #  GUI_SOURCES is to other GUI sources
 #  SOURCES is deprecated, please use SERVER_SOURCES or GUI_SOURCES
 #  REQUIRED_ON_SERVER is to specify whether this plugin should be loaded on server
@@ -719,6 +739,10 @@ ENDMACRO()
 #  html/css/png/jpg files that comprise of the documentation for the plugin. In
 #  addition, CMake will automatically generate documentation for any proxies
 #  defined in XMLs for this plugin.
+#  EULA (optional) :- a text file with the text for the EULA for the plugin.
+#                     the user is required to accept the EULA before the plugin
+#                     can be loaded.
+#
 # ADD_PARAVIEW_PLUGIN(Name Version
 #     [DOCUMENTATION_DIR dir]
 #     [SERVER_MANAGER_SOURCES source files]
@@ -734,6 +758,7 @@ ENDMACRO()
 #     [REQUIRED_ON_CLIENT]
 #     [REQUIRED_PLUGINS pluginname1 pluginname2]
 #     [CS_KITS kit1 kit2...]
+#     [EULA eulafile]
 #     [EXCLUDE_FROM_DEFAULT_TARGET]
 #  )
 FUNCTION(ADD_PARAVIEW_PLUGIN NAME VERSION)
@@ -754,6 +779,7 @@ FUNCTION(ADD_PARAVIEW_PLUGIN NAME VERSION)
   SET(ARG_AUTOLOAD)
   SET(ARG_CS_KITS)
   SET(ARG_DOCUMENTATION_DIR)
+  SET(ARG_EULA)
 
   SET(PLUGIN_NAME "${NAME}")
   SET(PLUGIN_VERSION "${VERSION}")
@@ -778,7 +804,7 @@ FUNCTION(ADD_PARAVIEW_PLUGIN NAME VERSION)
   INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 
   PV_PLUGIN_PARSE_ARGUMENTS(ARG
-    "DOCUMENTATION_DIR;SERVER_MANAGER_SOURCES;SERVER_MANAGER_XML;SERVER_SOURCES;PYTHON_MODULES;GUI_INTERFACES;GUI_RESOURCES;GUI_RESOURCE_FILES;GUI_SOURCES;SOURCES;REQUIRED_PLUGINS;REQUIRED_ON_SERVER;REQUIRED_ON_CLIENT;EXCLUDE_FROM_DEFAULT_TARGET;AUTOLOAD;CS_KITS"
+    "DOCUMENTATION_DIR;SERVER_MANAGER_SOURCES;SERVER_MANAGER_XML;SERVER_SOURCES;PYTHON_MODULES;GUI_INTERFACES;GUI_RESOURCES;GUI_RESOURCE_FILES;GUI_SOURCES;SOURCES;REQUIRED_PLUGINS;REQUIRED_ON_SERVER;REQUIRED_ON_CLIENT;EXCLUDE_FROM_DEFAULT_TARGET;AUTOLOAD;CS_KITS;EULA"
     "" ${ARGN} )
 
   PV_PLUGIN_LIST_CONTAINS(reqired_server_arg "REQUIRED_ON_SERVER" ${ARGN})
@@ -926,6 +952,23 @@ FUNCTION(ADD_PARAVIEW_PLUGIN NAME VERSION)
   endif()
 
   IF(GUI_SRCS OR SM_SRCS OR ARG_SOURCES OR ARG_PYTHON_MODULES)
+    set (plugin_sources
+      ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.cxx
+      ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.h)
+
+    # handle EULA
+    if (ARG_EULA)
+      set(PLUGIN_HAS_EULA 1)
+      vtk_encode_string(
+        INPUT ${ARG_EULA}
+        NAME ${PLUGIN_NAME}_EULA
+        HEADER_OUTPUT PLUGIN_EULA_HEADER
+        SOURCE_OUTPUT PLUGIN_EULA_SOURCE)
+      list(APPEND plugin_sources ${PLUGIN_EULA_SOURCE} ${PLUGIN_EULA_HEADER})
+    else()
+      set(PLUGIN_HAS_EULA 0)
+    endif()
+
     CONFIGURE_FILE(
       ${ParaView_CMAKE_DIR}/pqParaViewPlugin.h.in
       ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.h @ONLY)
@@ -933,17 +976,13 @@ FUNCTION(ADD_PARAVIEW_PLUGIN NAME VERSION)
       ${ParaView_CMAKE_DIR}/pqParaViewPlugin.cxx.in
       ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.cxx @ONLY)
 
-    SET (plugin_sources
-      ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.cxx
-      ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.h
-    )
     IF (plugin_type_gui)
       set (__plugin_sources_tmp)
       QT5_WRAP_CPP(__plugin_sources_tmp ${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}_Plugin.h)
       SET (plugin_sources ${plugin_sources} ${__plugin_sources_tmp})
     ENDIF ()
 
-   if (MSVC)
+    if (MSVC)
       # Do not generate manifests for the plugins - caused issues loading plugins
       set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO")
     endif()
@@ -1057,7 +1096,7 @@ MACRO(WRAP_PLUGIN_FOR_PYTHON NAME WRAP_LIST WRAP_EXCLUDE_LIST)
   # should not be linked into the shared library.  Instead the symbols
   # are exported from the python executable so that they can be used by
   # shared libraries that are linked or loaded.  On Windows and OSX we
-  # want to link to the python libray to resolve its symbols
+  # want to link to the python library to resolve its symbols
   # immediately.
   IF(WIN32 OR APPLE)
     TARGET_LINK_LIBRARIES (${NAME}PythonD ${VTK_PYTHON_LIBRARIES})
@@ -1133,7 +1172,7 @@ macro(pv_process_modules)
   set (current_module_set ${VTK_MODULES_ALL})
   list(APPEND VTK_MODULES_AVAILABLE ${VTK_MODULES_ALL})
 
-  # sort the modules based on depedencies. This will endup bringing in
+  # sort the modules based on dependencies. This will endup bringing in
   # VTK-modules too. We raise errors if required VTK modules are not already
   # enabled.
   include(TopologicalSort)
@@ -1187,7 +1226,7 @@ endmacro()
 # within ParaView plugins. This is only needed when building plugins outside of
 # ParaVIew's source tree.
 macro(pv_setup_module_environment _name)
-  # Setup enviroment to build VTK modules outside of VTK source tree.
+  # Setup environment to build VTK modules outside of VTK source tree.
   set (BUILD_SHARED_LIBS ${VTK_BUILD_SHARED_LIBS})
 
   if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)

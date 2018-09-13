@@ -651,10 +651,10 @@ void vtkNIfTIReaderUpdate2(
   /* Returns proper name for cases 1,2,3 */
   std::string ImageFileName = GetImageFileName(self->GetFileName());
   // NOTE: gzFile operations act just like FILE * operations when the files
-  // are not in gzip fromat.
+  // are not in gzip format.
   // This greatly simplifies the following code, and gzFile types are used
   // everywhere.
-  // In addition, it has the added benifit of reading gzip compressed image
+  // In addition, it has the added benefit of reading gzip compressed image
   // files that do not have a .gz ending.
   gzFile file_p = ::gzopen(ImageFileName.c_str(), "rb");
   if (file_p == NULL)
@@ -1285,7 +1285,7 @@ int vtkNIfTIReader::CanReadFile(const char* fname)
   }
   local_InputStream.close();
 
-  // if the machine and file endianess are different
+  // if the machine and file endianness are different
   // perform the byte swapping on it
   // this->m_ByteOrder = this->CheckAnalyzeEndian(this->m_hdr);
   // this->SwapHeaderBytesIfNecessary( &(this->m_hdr) );

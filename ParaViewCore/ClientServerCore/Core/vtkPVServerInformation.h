@@ -17,7 +17,7 @@
  * @brief   Gets features of the server.
  *
  * This objects is used by the client to get the features
- * suported by the server.
+ * supported by the server.
  * At the moment, server information is only on the root.
 */
 
@@ -70,7 +70,7 @@ public:
 
   //@{
   /**
-   * Varibles (command line argurments) set to render to a tiled display.
+   * Variables (command line argurments) set to render to a tiled display.
    */
   vtkSetVector2Macro(TileDimensions, int);
   vtkGetVector2Macro(TileDimensions, int);
@@ -89,17 +89,19 @@ public:
   //@{
   /**
    * Get/Set if the server supports saving OGVs.
+   * @deprecated in ParaView 5.5
    */
-  vtkSetMacro(OGVSupport, int);
-  vtkGetMacro(OGVSupport, int);
+  VTK_LEGACY(void SetOGVSupport(int));
+  VTK_LEGACY(int GetOGVSupport());
   //@}
 
   //@{
   /**
    * Get/Set if the server supports saving AVIs.
+   * @deprecated in ParaView 5.5
    */
-  vtkSetMacro(AVISupport, int);
-  vtkGetMacro(AVISupport, int);
+  VTK_LEGACY(void SetAVISupport(int));
+  VTK_LEGACY(int GetAVISupport());
   //@}
 
   //@{

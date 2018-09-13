@@ -254,7 +254,7 @@ void GenericFileIO_POSIX::open(const std::string& FN, bool ForReading)
   errno = 0;
 
 #ifdef _WIN32
-  // Windows POSIX Must explicitely define O_BINARY otherwise it defaults to text mode
+  // Windows POSIX Must explicitly define O_BINARY otherwise it defaults to text mode
   int flags = ForReading ? (O_RDONLY | O_BINARY) : (O_WRONLY | O_CREAT | O_BINARY);
   int mode = S_IRUSR | S_IWUSR;
   if ((FH = lanl::open(FileName.c_str(), flags, mode)) == -1)
@@ -963,7 +963,7 @@ void GenericIO::readHeaderLeader(void* GHPtr, MismatchBehavior MB, int NRanks, i
   }
 
   HeaderSize = GH.HeaderSize;
-  Header.resize(HeaderSize + CRCSize, static_cast<char>(0xFE) /* poison */);
+  Header.resize(HeaderSize + CRCSize, '\xFE' /* poison */);
   FH.get()->read(&Header[0], HeaderSize + CRCSize, 0, "header");
 
   uint64_t CRC = crc64_omp(&Header[0], HeaderSize + CRCSize);
@@ -1143,7 +1143,7 @@ void GenericIO::openAndReadHeader(MismatchBehavior MB, int EffRank, bool CheckPa
   MPI_Bcast(&HeaderSize, 1, MPI_UINT64_T, 0, SplitComm);
 #endif
 
-  Header.resize(HeaderSize, static_cast<char>(0xFD) /* poison */);
+  Header.resize(HeaderSize, '\xFD' /* poison */);
 #ifndef LANL_GENERICIO_NO_MPI
   MPI_Bcast(&Header[0], HeaderSize, MPI_BYTE, 0, SplitComm);
 #endif
@@ -1737,7 +1737,9 @@ void GenericIO::readCoords(int Coords[3], int EffRank)
   RankHeader<IsBigEndian>* RH =
     (RankHeader<IsBigEndian>*)&FH.getHeaderCache()[GH->RanksStart + RankIndex * GH->RanksSize];
 
-  std::copy(RH->Coords, RH->Coords + 3, Coords);
+  Coords[0] = static_cast<int>(RH->Coords[0]);
+  Coords[1] = static_cast<int>(RH->Coords[1]);
+  Coords[2] = static_cast<int>(RH->Coords[2]);
 }
 
 void GenericIO::readData(int EffRank, bool PrintStats, bool CollStats)
@@ -2049,7 +2051,7 @@ void GenericIO::readData(
         crc64_omp(Data, ReadSize);
 #else // Commenting because NewCRC cannot == -1 (uint64) and this is debugging code.
 //        uint64_t NewCRC = crc64_omp(Data, ReadSize);
-//        std::cerr << "Recalulated CRC: " << NewCRC << ((NewCRC == -1) ? "ok" : "bad") << "\n";
+//        std::cerr << "Recalculated CRC: " << NewCRC << ((NewCRC == -1) ? "ok" : "bad") << "\n";
 #endif
         break;
       }

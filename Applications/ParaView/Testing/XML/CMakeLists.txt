@@ -2,6 +2,7 @@
 # the data.
 paraview_test_load_data_dirs(""
   amr
+  AMReX-MFIX
   ANALYZE
   cgns_np01
   cgns_np04
@@ -18,7 +19,7 @@ paraview_test_load_data_dirs(""
   GMV/invalid
   GMV/partial-pyramid
   GMV/quadratic_cells
-  "Iron Xdmf"
+  Iron_Xdmf
   RodPlate
   singleSphereAnimation
   SLAC/pic-example
@@ -31,7 +32,7 @@ paraview_test_load_data_dirs(""
 paraview_test_load_data(""
   ,REGEX:tensors_.*\\.vti
   artifact.dta
-  "blow data.myvtk"
+  blow_data.myvtk
   blow.vtk
   bluntfin.vts
   can.ex2
@@ -49,7 +50,8 @@ paraview_test_load_data(""
   dualSphereAnimation4.pvd
   dualSphereAnimation.clone.pvd
   dualSphereAnimation.pvd
-  "iron protein.vtk"
+  iron_protein.vtk
+  linesPolydata.vtk
   LoadState.pvsm
   LoadStateDialog.pvsm
   minimal.nii
@@ -62,6 +64,7 @@ paraview_test_load_data(""
   NE2_ps_bath.png
   non_convex_polygon.vtu
   office.binary.vtk
+  pointSet.vtk
   porphyrin.cml
   PropertyLink.pvsm
   quadraticTetra01.vtu
@@ -80,23 +83,29 @@ paraview_test_load_data(""
   tube.exo
   vehicle_data.csv
   viscoplastic-ring.h5
+  waveletElevation.vti
   waveletMaterial.vti
+  TestCompositePropertyWidgetDecoratorPlugin.xml
   )
 
 SET (TESTS_WITHOUT_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/AboutDialog.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ArrayBoundsScaleDomain.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/BookmarksFilters.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CustomOutputFormat.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/DelimitedTextReader.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ExportFilteredColumnsSpreadsheet.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/FindWidget.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ModifyGUIWindowTitle.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/OpenHelp.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PartialArrayInLineChart.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/PluginEULA.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Preview.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SearchBox.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ServerConnectDialog.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/StringInLineChartView.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/TableHistogram.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/TestCompositePropertyWidgetDecorator.xml
 )
 
 if (PARAVIEW_ENABLE_PYTHON)
@@ -111,14 +120,20 @@ endif()
 
 SET (TESTS_WITH_INLINE_COMPARES
   ${CMAKE_CURRENT_SOURCE_DIR}/AxesGrid.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/BoundingRuler.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CalculatorQuotedVariable.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CameraLink.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ChartLoadNoVariables.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ClampAndUpdateColorMap.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Contour.xml
-  ${CMAKE_CURRENT_SOURCE_DIR}/DisconnectAndSaveAnimation.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Ensemble.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/FileSeries.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridAxisClip.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridAxisCut.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridAxisReflection.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridCellCenters.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridContour.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridPlaneCutter.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/LightAddRemove.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/LineChartSelection.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/LoadStateMultiView.xml
@@ -135,12 +150,25 @@ SET (TESTS_WITH_INLINE_COMPARES
   ${CMAKE_CURRENT_SOURCE_DIR}/ResetToVisibleRange.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Ruler.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SaveLargeScreenshot.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/SimpleImageSource.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Slice.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/TestIsoVolume.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/TransferFunctionResetOnVisibilityChange.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/UpdateTransferFunctionRanges.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/XYChart.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/XYHistogram.xml
+)
+
+# These tests do not work in parallel due to issues with
+# partitioned vtkHyperTreeGrids. When those issues are fixed
+# these tests should be enabled in parallel again by adding
+# them back to TESTS_WITH_INLINE_COMPARES
+SET (HTG_TESTS_WITH_INLINE_COMPARES
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridDepthLimiter.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/HyperTreeGridThreshold.xml
+)
+add_client_tests("pv"
+  TEST_SCRIPTS ${HTG_TESTS_WITH_INLINE_COMPARES}
 )
 
 if(NOT APPLE)
@@ -160,7 +188,6 @@ SET(TESTS_WITH_BASELINES
 if(PARAVIEW_USE_VISITBRIDGE)
   list(APPEND TESTS_WITH_BASELINES
     ${CMAKE_CURRENT_SOURCE_DIR}/VisItBridgeChombo.xml
-    ${CMAKE_CURRENT_SOURCE_DIR}/VisItBridgeEnzo.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/VisItBridgeLAMMPSDump.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/VisItBridgeLAMMPSDump2.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/VisItBridgeNas.xml
@@ -199,53 +226,69 @@ if (NOT APPLE)
     ${CMAKE_CURRENT_SOURCE_DIR}/HistogramSelection.xml)
 endif()
 
-# Catalyst-Live tests
-# ----------------------------------------------------------------------
-if(PARAVIEW_ENABLE_CATALYST AND PARAVIEW_ENABLE_PYTHON)
-  set (catalyst_live_tests
-    CatalystLiveSetBreakpoint
-    CatalystLivePause)
+macro(ADD_CATALYST_LIVE_TEST test_name duration command_line_connect_command)
+  # These tests are too complex to run in parallel.
   set (CATALYST_SIMULATION CatalystWaveletDriver.py)
   set (INSITU_SCRIPT CatalystWaveletCoprocessing)
-  # Test-specific parameters
-  set (CatalystLiveSetBreakpoint_DURATION 222)
-  set (CatalystLivePause_DURATION 80)
 
-  foreach (tname ${catalyst_live_tests})
-    # These tests are too complex to run in parallel.
-    set ("${tname}_FORCE_SERIAL" TRUE)
-    add_pv_test("pv" "_DISABLE_C"
-      COMMAND
-      --script-ignore-output-errors --script $<TARGET_FILE:pvbatch> -sym
-      ${CMAKE_CURRENT_SOURCE_DIR}/${CATALYST_SIMULATION}
-      ${INSITU_SCRIPT} "${${tname}_DURATION}"
+  set ("${test_name}_FORCE_SERIAL" TRUE)
+  add_pv_test("pv" "_DISABLE_C"
+    COMMAND
+    --script-ignore-output-errors --script $<TARGET_FILE:pvbatch> -sym
+    ${CMAKE_CURRENT_SOURCE_DIR}/${CATALYST_SIMULATION}
+    ${INSITU_SCRIPT} "${duration}"
 
-      --client ${CLIENT_EXECUTABLE}
-      --enable-bt
-      -dr
-      --test-directory=${PARAVIEW_TEST_DIR}
-      BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
-      TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/${tname}.xml
-      EXTRA_LABELS "CATALYST")
+    --client ${CLIENT_EXECUTABLE}
+    --enable-bt
+    ${command_line_connect_command}
+    -dr
+    --test-directory=${PARAVIEW_TEST_DIR}
+    BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/${test_name}.xml
+    EXTRA_LABELS "CATALYST")
 
-    add_pv_test(pvcs "_DISABLE_CS"
-      COMMAND
-      --script-np 5 --script-ignore-output-errors
-      --script $<TARGET_FILE:pvbatch> -sym
-      ${CMAKE_CURRENT_SOURCE_DIR}/${CATALYST_SIMULATION}
-      ${INSITU_SCRIPT} "${${tname}_DURATION}"
+  add_pv_test(pvcs "_DISABLE_CS"
+    COMMAND
+    --script-np 5 --script-ignore-output-errors
+    --script $<TARGET_FILE:pvbatch> -sym
+    ${CMAKE_CURRENT_SOURCE_DIR}/${CATALYST_SIMULATION}
+    ${INSITU_SCRIPT} "${duration}"
 
-      --server $<TARGET_FILE:pvserver>
-      --enable-bt
+    --server $<TARGET_FILE:pvserver>
+    --enable-bt
 
-      --client ${CLIENT_EXECUTABLE}
-      --enable-bt
-      -dr
-      --test-directory=${PARAVIEW_TEST_DIR}
-      BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
-      TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/${tname}.xml
-      EXTRA_LABELS "CATALYST")
-  endforeach()
+    --client ${CLIENT_EXECUTABLE}
+    --enable-bt
+    ${command_line_connect_command}
+    -dr
+    --test-directory=${PARAVIEW_TEST_DIR}
+    BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/${test_name}.xml
+    EXTRA_LABELS "CATALYST")
+
+endmacro(ADD_CATALYST_LIVE_TEST)
+
+# Catalyst tests
+# ----------------------------------------------------------------------
+if(PARAVIEW_ENABLE_CATALYST AND PARAVIEW_ENABLE_PYTHON)
+
+  add_client_tests("pv"
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/CatalystGUI.xml )
+  set_tests_properties(pv.CatalystGUI PROPERTIES RUN_SERIAL ON LABELS "PARAVIEW;CATALYST")
+  add_client_tests("pv"
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/CatalystCinemaGUI.xml )
+  set_tests_properties(pv.CatalystCinemaGUI PROPERTIES RUN_SERIAL ON LABELS "PARAVIEW;CATALYST")
+
+  add_catalyst_live_test(CatalystLiveSetBreakpoint 222 "")
+  # the CatalystLivePause test uses the --live=22222 command line option to automatically
+  # connect to a running simulation on port 22222
+  add_catalyst_live_test(CatalystLivePause 80  "--live=22222")
+
+  # tests for the new export inspector panel
+  add_client_tests("pv"
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/CatalystExporterGUI.xml )
+  set_tests_properties(pv.CatalystExporterGUI PROPERTIES RUN_SERIAL ON LABELS "PARAVIEW;CATALYST")
+
 endif()
 
 if (PARAVIEW_ENABLE_XDMF2 AND NOT PARAVIEW_ENABLE_XDMF3)
@@ -270,7 +313,10 @@ endif()
 list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/4AxesContextView.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/AccentuatedFilename.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/AMRCutPlane.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/AMReXParticlesReader.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Annotations.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ConvertToMolecule.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CopyPasteProperties.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CTHAMRBaseline.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CTHAMRClip.xml
@@ -282,9 +328,11 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/AnimatePipelineTime.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/AngularPeriodicFilter.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/BagPlots.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/BagPlotsSelection.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/3DWidgetInCustomFilter.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CalcParens.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Calculator.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ChangeGlyphRepVisibility.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ChangingTimestepsInStateFiles.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ChartAxisRangeAndLabels.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CheckableHeader.xml
@@ -305,14 +353,14 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/CreateDelete.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CustomFilter.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/CustomSourceProbe.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/CustomViewpoints.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/DataOutlines.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/DisableResetDisplayEmptyViews.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/DualSphereAnimation.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/EnSight.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/EnSightTensorInversion.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/EnSightTensorInversionBin.xml
-  # Disable ExodusXML.xml test until issue with
-  # vtkExodusIIReader::SetXMLFileName() is resolved.
-  #${CMAKE_CURRENT_SOURCE_DIR}/ExodusXML.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ExodusXML.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ExportLinePlotToCSV.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ExportLinePlotToTSV.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ExportSceneSpreadSheetView2.xml
@@ -322,6 +370,7 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/ExtractComponentFilter.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ExtractLevel.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ExtractTimeSteps.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/FeatureEdges.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/FFTOverTime.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/FieldDataBlocks.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Flow.xml
@@ -330,11 +379,13 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/ForceTime.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Fractal2D.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/FunctionalBagPlots.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/Glyph3DCullingAndLOD.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Glyph3DRepresentation.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/GlyphUseCellCenters.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/H5PartReader.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/HideAll.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/HorizontalColorLegendTitle.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/IgnoreLogAxisWarning.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ImageVolumeRendering.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/InteractiveSelection.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/InteractiveViewLinkOffscreen.xml
@@ -348,6 +399,8 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/LoadStateChooseFiles.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/LoadStateUseExisting.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/LoadSaveStateVolume.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/MoleculeBonds.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/MoleculeToLines.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/MultiBlockAttributes1.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/MultiBlockInspector.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/MultiBlockSingleBlock.xml
@@ -362,6 +415,7 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/OrthographicView.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/OutOfRangeColors.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/Plot3DReader.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/PlotDataOverTime-NonDistributed.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PlotEdges2.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PlotEdges.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PlotGlobalVariablesOverTime.xml
@@ -369,6 +423,8 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/PolygonCellSelection.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PolygonPointSelection.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PointChartView.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/PointGaussianMultiBlockDataSet.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/PointGaussianNoScaleTransferFunction.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PointGaussianScaleOpacityArray.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PointInterpolator.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/PolarAxes.xml
@@ -383,10 +439,12 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/RepresentationSelector.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ResampleWithDataset.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/RescaleToTemporal.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ReverseLegend.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/RotateCamera90.xml
 #  ${CMAKE_CURRENT_SOURCE_DIR}/SaveAnimationGeometry.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SaveColorMap.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SaveCSV.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/SaveOBJ.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SaveTSV.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SaveTXT.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SelectedProxyPanelVisibility.xml
@@ -394,6 +452,9 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/SelectionModifiersPoints.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SelectionModifiersBlocks.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SelectReader.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/SetCustomBasicPresets.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ShaderReplacements.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ShowAll.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SimpleInteraction.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SliceAlongPolyline.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SliceAlongSpline.xml
@@ -414,9 +475,11 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/SelectionLinkReaction.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SelectionLinkReactionNonConverted.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SeparatedColorMap.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/SeparatedColorMapOpacity.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SliceWithPlane.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SliceWithPlaneMultiBlock.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/SortLineChartData.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/ScrollAreaNativeWidget.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/StockColors.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/StreamTracerSurface.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/StreamTracerUpdates.xml
@@ -439,13 +502,34 @@ list(APPEND TESTS_WITH_BASELINES
   ${CMAKE_CURRENT_SOURCE_DIR}/UndoRedo7.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/UndoRedo8.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/UnstructuredOutline.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/VectorComponentHistogram.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/VolumeRenderingWithContour.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/VolumeReprTwoIndepComp.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/VariableSelector.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/VariableSelector1.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/ViewSettingsDialog.xml
+  ${CMAKE_CURRENT_SOURCE_DIR}/VTPSeriesFile.xml
   #  ${CMAKE_CURRENT_SOURCE_DIR}/XYBarChart.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/RandomAttributes.xml
 )
+
+if (TARGET pvNVIDIAIndeX)
+  list(APPEND TESTS_WITH_BASELINES
+    ${CMAKE_CURRENT_SOURCE_DIR}/IndeXRepresentation.xml)
+  set(IndeXRepresentation_DISABLE_CS TRUE)
+  set(IndeXRepresentation_DISABLE_CRS TRUE)
+
+  # The embedded free IndeX license doesn't support parallel processing.
+  # Disable the test on MPI builds.
+  if (NOT PARAVIEW_USE_MPI)
+    list(APPEND TESTS_WITH_BASELINES
+      ${CMAKE_CURRENT_SOURCE_DIR}/IndeXRepresentationServer.xml)
+    set(IndeXRepresentationServer_DISABLE_C TRUE)
+    # This won't work until image delivery for the render server is
+    # implemented.
+    set(IndeXRepresentationServer_DISABLE_CRS TRUE)
+  endif ()
+endif ()
 
 if(VTK_USE_LARGE_DATA)
   paraview_test_load_data_dirs(""
@@ -488,6 +572,16 @@ if (PARAVIEW_USE_MPI)
 
     # Test Use Data Partitions for volume rendering
     #${CMAKE_CURRENT_SOURCE_DIR}/UseDataPartitions.xml
+  )
+
+  # DistributePoints is only tested in non-built-in mode.
+  add_client_server_tests("pvcs"
+    BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/DistributePoints.xml
+  )
+  add_client_render_server_tests("pvcrs"
+    BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
+    TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/DistributePoints.xml
   )
 
   # Volume rendering seems to work better in serial
@@ -548,13 +642,14 @@ endif()
 if(PARAVIEW_ENABLE_PYTHON)
   list(APPEND TESTS_WITH_BASELINES
     ${CMAKE_CURRENT_SOURCE_DIR}/ColorByComponentNames.xml # needs programmable filter
+    ${CMAKE_CURRENT_SOURCE_DIR}/LiveProgrammableSource.xml
+    ${CMAKE_CURRENT_SOURCE_DIR}/SaveLoadStatePython.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/SelectionLabels.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/TraceExodus.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/TraceExportAndSaveData.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/TraceSaveGeometry.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/TraceStatisticsFilter.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/TraceSupplementalProxiesFully.xml
-    ${CMAKE_CURRENT_SOURCE_DIR}/SaveLoadStatePython.xml
   )
   list(APPEND TESTS_WITH_INLINE_COMPARES
     ${CMAKE_CURRENT_SOURCE_DIR}/RestoreArrayDefaultTransferFunction.xml
@@ -580,8 +675,11 @@ if(PARAVIEW_ENABLE_PYTHON)
       ${CMAKE_CURRENT_SOURCE_DIR}/FindDataSelectLocation.xml # find data needs python/numpy
       ${CMAKE_CURRENT_SOURCE_DIR}/FindDataSelectLocationMultiblock.xml # find data needs python/numpy
       ${CMAKE_CURRENT_SOURCE_DIR}/ForceTimeDiamond.xml
+      ${CMAKE_CURRENT_SOURCE_DIR}/IndexedLookupInitialization.xml # needs Python Calculator/numpy
       ${CMAKE_CURRENT_SOURCE_DIR}/StructuredGridCellBlanking.xml
-      ${CMAKE_CURRENT_SOURCE_DIR}/TestFindDataMax.xml)
+      ${CMAKE_CURRENT_SOURCE_DIR}/TestFindDataMax.xml
+      ${CMAKE_CURRENT_SOURCE_DIR}/VolumeNoMapScalars.xml # needs programmable filter + numpy
+      )
     list(APPEND TESTS_WITH_INLINE_COMPARES
       ${CMAKE_CURRENT_SOURCE_DIR}/FindDataDialog.xml)
 
@@ -607,6 +705,28 @@ if(PARAVIEW_ENABLE_PYTHON)
     set(ImportCinema_DISABLE_CRS TRUE)
     set(ImportCinemaSpecA_DISABLE_CS TRUE)
     set(ImportCinemaSpecA_DISABLE_CRS TRUE)
+
+
+    # PythonAlgorithm plugin tests.
+    configure_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/PythonAlgorithmPlugin.xml.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/PythonAlgorithmPlugin.xml" @ONLY)
+    configure_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/PythonAlgorithmReadersAndWriters.xml.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/PythonAlgorithmReadersAndWriters.xml" @ONLY)
+
+    set(pyalgo_plugin_tests
+      PythonAlgorithmPlugin
+      PythonAlgorithmReadersAndWriters)
+    foreach(tname IN LISTS pyalgo_plugin_tests)
+      list(APPEND TESTS_WITH_BASELINES
+        ${CMAKE_CURRENT_BINARY_DIR}/${tname}.xml)
+
+      # we need to extend testing infrastructure to better support
+      # loading plugins in client-server. At that point, we can test these as well.
+      set(${tname}_DISABLE_CS TRUE)
+      set(${tname}_DISABLE_CRS TRUE)
+    endforeach()
   endif()
 endif()
 
@@ -705,13 +825,15 @@ set (SaveColorMap_FORCE_SERIAL TRUE) # Uses inline edit popups
 set (CategoricalColors_FORCE_SERIAL TRUE) # Uses inline edit popups
 set (ChartAxisRangeAndLabels_FORCE_SERIAL TRUE) # Uses inline edit popups
 set (SaveTSV_FORCE_SERIAL TRUE) # Seems to works better in serial
-set (DisconnectAndSaveAnimation_FORCE_SERIAL TRUE) # Seems to works better in serial
 set (ComparativeViewOverlay_FORCE_SERIAL TRUE) # Seems to works better in serial
 set (CategoricalAutomaticAnnotations_FORCE_SERIAL TRUE) # Seems to works better in serial
+set (CategoricalOpacities_FORCE_SERIAL TRUE) # Seems to works better in serial
 
 set (LoadSaveStateVolume_FORCE_SERIAL TRUE)
 # We don't support volume rendering of image data in data server & render server mode
 set(LoadSaveStateVolume_DISABLE_CRS TRUE)
+set(SeparatedColorMapOpacity_DISABLE_CRS TRUE)
+set(VolumeReprTwoIndepComp_DISABLE_CRS TRUE)
 
 # Set properties for CTH tests
 set(CTHAMRContour_DISABLE_CS TRUE)
@@ -739,7 +861,7 @@ SET (Flow2_THRESHOLD 15)
 SET (UndoRedo1_THRESHOLD 15)
 SET (UndoRedo4_THRESHOLD 15)
 
-# Differnces between systems on whether the lines are anti-aliased or not
+# Differences between systems on whether the lines are anti-aliased or not
 SET (SortLineChartData_THRESHOLD 50)
 
 # Since often there are issues with fonts etc.
@@ -755,6 +877,11 @@ set (ChartAxisRangeAndLabels_THRESHOLD 60)
 SET (ColorEditorControls_THRESHOLD 60)
 SET (ColorEditorVolumeControls_THRESHOLD 300)
 
+# PlotDataOverTime produces different block labels in parallel
+# This leeway helps that.
+set (PlotDataOverTime-NonDistributed_THRESHOLD 25)
+
+
 # Plot image leeway.
 set (SpreadSheet2_THRESHOLD 50)
 set (PlotOverTimeAutoApply_THRESHOLD 50)
@@ -765,11 +892,6 @@ set (QuartilePlot_THRESHOLD 20)
 # The ExportLinePlotToTSV test uses the same image baseline as the ExportLinePlotToCSV test
 set (ExportLinePlotToTSV_BASELINE ExportLinePlotToCSV.png)
 
-# DisconnectAndSaveAnimation is only support in Client-Server mode.
-set (DisconnectAndSaveAnimation_DISABLE_C TRUE)
-set (DisconnectAndSaveAnimation_DISABLE_CRS TRUE)
-set (DisconnectAndSaveAnimation_BREAK TRUE)
-
 # ExportSceneSpreadSheetView2 won't work in parallel CS because of ghost cells
 # than cannot be processed by TableToStructuredGrid.
 set(ExportSceneSpreadSheetView2_DISABLE_CS TRUE)
@@ -779,8 +901,11 @@ set(ExportSceneSpreadSheetView2_DISABLE_CRS TRUE)
 # in this test.
 set (RemoteRendering_DISABLE_CRS TRUE)
 set (RemoteRendering_THRESHOLD 50)
-set (VolumeRenderingWithContour_DISABLE_CRS 50)
+set (VolumeRenderingWithContour_DISABLE_CRS TRUE)
 set (VolumeRenderingWithContour_THRESHOLD 50)
+set (VolumeNoMapScalars_DISABLE_CRS TRUE)
+set (VolumeNoMapScalars_THRESHOLD 50)
+
 
 # Histogram filter produces different results when running in parallel, so
 # disable it.
@@ -810,6 +935,8 @@ IF (PARAVIEW_USE_MPI)
   # Hence disable them.
   set (BagPlots_DISABLE_CS TRUE)
   set (BagPlots_DISABLE_CRS TRUE)
+  set (BagPlotsSelection_DISABLE_CS TRUE)
+  set (BagPlotsSelection_DISABLE_CRS TRUE)
   set (FunctionalBagPlots_DISABLE_CS TRUE)
   set (FunctionalBagPlots_DISABLE_CRS TRUE)
 
@@ -827,7 +954,7 @@ IF (PARAVIEW_USE_MPI)
   endif()
 ENDIF ()
 
-# Composite Surface Selection is currently broken in everything but bultin
+# Composite Surface Selection is currently broken in everything but builtin
 SET (CompositeSurfaceSelection_DISABLE_CS TRUE)
 SET (CompositeSurfaceSelection_DISABLE_CRS TRUE)
 
@@ -859,7 +986,7 @@ SET (SaveTXT_BASELINE SaveCSV.png)
 
 ## Disable ClientRenderServer tests for FFTOverTime. This is done since
 ## selection is not supported in render server mode esp. when number of render
-## server processess is not same as the data server processes
+## server processes is not the same as the data server processes
 set (FFTOverTime_DISABLE_CRS TRUE)
 set (FFTOverTime_THRESHOLD 70) # since there's a plot, account for minor
                                # rendering differences.
@@ -906,6 +1033,10 @@ set (ResetToVisibleRange_DISABLE_CRS TRUE)
 # Molecules are not supported in client-serve modes, currently.
 set (Molecule_DISABLE_CS TRUE)
 set (Molecule_DISABLE_CRS TRUE)
+
+# Because of #18421, we need to disable this test in client/server
+set (PointGaussianMultiBlockDataSet_DISABLE_CS TRUE)
+set (PointGaussianMultiBlockDataSet_DISABLE_CRS TRUE)
 
 ##########################################################
 # List of known incompatible tests for Collaboration
@@ -1101,6 +1232,33 @@ if (TARGET paraview)
             --state=${CMAKE_CURRENT_BINARY_DIR}/exodusStateFile.3.14.1.pvsm
     BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
     TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/LoadExodusStateFile.xml)
+
+  if (PARAVIEW_ENABLE_PYTHON)
+    # Test whether or not we can load a Python state file with the --state
+    # command line option as well as loading a Python state file that was
+    # generated with PV 5.4.1. Loading the 5.4.1 Python state file checks
+    # on backwards compatibility.
+    set (Calculator54State_THRESHOLD 100)
+    add_pv_test("pv" "_DISABLE_C"
+      COMMAND --client $<TARGET_FILE:paraview>
+              --enable-bt
+              -dr
+              --state=${CMAKE_CURRENT_SOURCE_DIR}/Calculator54State.py
+              --test-directory=${PARAVIEW_TEST_DIR}
+      BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
+      TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/Calculator54State.xml)
+
+    # Test backwards compatibility for Glyph filter change in ParaView 5.6
+    add_pv_test("pv" "_DISABLE_C"
+      COMMAND --client $<TARGET_FILE:paraview>
+              --enable-bt
+              -dr
+              --state=${CMAKE_CURRENT_SOURCE_DIR}/Glyph56State.py
+              --test-directory=${PARAVIEW_TEST_DIR}
+      BASELINE_DIR ${PARAVIEW_TEST_BASELINE_DIR}
+      TEST_SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/Glyph56State.xml
+    )
+  endif()
 
   #----------------------------------------------------------------------
   # Add test to test stereo rendering modes.

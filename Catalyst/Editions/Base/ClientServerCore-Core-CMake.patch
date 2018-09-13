@@ -1,5 +1,5 @@
 diff --git a/ParaViewCore/ClientServerCore/Core/CMakeLists.txt b/ParaViewCore/ClientServerCore/Core/CMakeLists.txt
-index 4f283bd..f05aa2b 100644
+index 9b10ff8..f98b22e 100644
 --- a/ParaViewCore/ClientServerCore/Core/CMakeLists.txt
 +++ b/ParaViewCore/ClientServerCore/Core/CMakeLists.txt
 @@ -34,7 +34,6 @@ set (Module_SRCS
@@ -10,15 +10,22 @@ index 4f283bd..f05aa2b 100644
    vtkProcessModuleAutoMPI.cxx
    vtkProcessModule.cxx
    vtkPVAlgorithmPortsInformation.cxx
-@@ -48,8 +47,6 @@ set (Module_SRCS
+@@ -48,7 +47,6 @@ set (Module_SRCS
    vtkPVDataSizeInformation.cxx
    vtkPVDisableStackTraceSignalHandler.cxx
    vtkPVEnableStackTraceSignalHandler.cxx
 -  vtkPVExtractSelection.cxx
--  vtkPVExtractArraysOverTime.cxx
    vtkPVFileInformationHelper.cxx
    vtkPVGenericAttributeInformation.cxx
    vtkPVInformation.cxx
+@@ -108,7 +106,6 @@ if (PARAVIEW_ENABLE_PYTHON)
+     vtkPythonExtractSelection.cxx
+     vtkPythonProgrammableFilter.cxx
+     vtkPythonAnnotationFilter.cxx
+-    vtkPythonSelector.cxx
+     )
+ endif()
+
 diff --git a/ParaViewCore/ClientServerCore/Core/module.cmake b/ParaViewCore/ClientServerCore/Core/module.cmake
 index f17c4df..f0db074 100644
 --- a/ParaViewCore/ClientServerCore/Core/module.cmake
@@ -28,6 +35,6 @@ index f17c4df..f0db074 100644
    DEPENDS
 -    vtkFiltersExtraction
 -    vtkFiltersParallel
-     # Explicitely list (rather than transiently through
-     # vtkPVVTKExtensionsCore) because it allows us to turn of wrapping
-     # of vtkPVVTKExtensionsCore off but still satisfy API dependcy.
+     # Explicitly list (rather than transiently through
+     # vtkPVVTKExtensionsCore) because it allows us to turn wrapping
+     # of vtkPVVTKExtensionsCore off but still satisfy API dependency.

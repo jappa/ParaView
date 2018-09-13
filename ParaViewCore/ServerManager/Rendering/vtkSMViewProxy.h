@@ -139,7 +139,7 @@ public:
     const char* filename, const char* writerName, int magnificationX, int magnificationY);
 
   /**
-   * Return true any internal representation is dirty. This can be usefull to
+   * Return true any internal representation is dirty. This can be useful to
    * know if the internal geometry has changed.
    * DEPRECATED: Use GetNeedsUpdate() instead.
    */
@@ -216,6 +216,30 @@ public:
   }
   //@}
 
+  //@{
+  /**
+   * Certain views maintain properties (or other state) that should be updated
+   * when visibility of representations is changed e.g. SpreadSheetView needs to
+   * update the value of the "FieldAssociation" when a new data representation
+   * is being shown in the view. Subclasses can override this method to perform
+   * such updates to View properties. This is called explicitly by the
+   * `vtkSMParaViewPipelineControllerWithRendering` after changing
+   * representation visibility. Changes to representation visibility outside of
+   * `vtkSMParaViewPipelineControllerWithRendering` will require calling this
+   * method explicitly.
+   *
+   * Default implementation does not do anything.
+   */
+  virtual void RepresentationVisibilityChanged(vtkSMProxy* repr, bool new_visibility);
+  static void RepresentationVisibilityChanged(
+    vtkSMViewProxy* self, vtkSMProxy* repr, bool new_visibility)
+  {
+    if (self)
+    {
+      self->RepresentationVisibilityChanged(repr, new_visibility);
+    }
+  }
+  //@}
 protected:
   vtkSMViewProxy();
   ~vtkSMViewProxy() override;

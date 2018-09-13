@@ -546,6 +546,55 @@
       <!-- End Hyper Tree Grid -->
     </SourceProxy>
     <!-- ==================================================================== -->
+    <SourceProxy class="vtkRandomHyperTreeGridSource"
+                 label="Hyper Tree Grid (Random)"
+                 name="RandomHyperTreeGridSource">
+      <Documentation long_help="Construct a HyperTreeGrid from a random seed."
+                     short_help="Create a random hyper tree grid">This source uses input parameters,
+                     most notably a seed value, to generate a vtkHyperTreeGrid instance for testing.
+      </Documentation>
+      <IntVectorProperty command="SetSeed"
+                         default_values="0"
+                         name="Seed"
+                         number_of_elements="1">
+      </IntVectorProperty>
+      <IntVectorProperty command="SetGridSize"
+                         default_values="5 5 2"
+                         name="GridSize"
+                         number_of_elements="3">
+        <IntRangeDomain min="0"
+                        name="range" />
+        <Documentation>The three values in this property specify the number
+        of root cells in each dimension of the hyper tree grid.</Documentation>
+      </IntVectorProperty>
+      <DoubleVectorProperty command="SetOutputBounds"
+                         default_values="-10 10 -10 10 -10 10"
+                         name="OutputBounds"
+                         number_of_elements="6">
+        <Documentation>The bounds of the resulting dataset.</Documentation>
+      </DoubleVectorProperty>
+      <DoubleVectorProperty command="SetSplitFraction"
+                            default_values="0.5"
+                            name="SplitFraction"
+                            number_of_elements="1">
+        <DoubleRangeDomain min="0"
+                           max="1"
+                           name="range" />
+        <Documentation>The chance that a given node will be split during
+        construction. Higher values mean more splits.</Documentation>
+      </DoubleVectorProperty>
+      <IntVectorProperty command="SetMaxDepth"
+                         default_values="5"
+                         name="MaxDepth"
+                         number_of_elements="1">
+        <IntRangeDomain min="1"
+                        name="range" />
+        <Documentation>The value of this property specifies the maximum
+        number of levels in the hyper tree grid.</Documentation>
+      </IntVectorProperty>
+      <!-- End Random Hyper Tree Grid -->
+    </SourceProxy>
+    <!-- ==================================================================== -->
     <SourceProxy class="vtkHierarchicalFractal"
                  label="Hierarchical Fractal"
                  name="HierarchicalFractal">
@@ -848,7 +897,7 @@
         A cell block may be divided into multiple cells (e.g. there will be
         6 pyramid cells in a cell block). If a 1D cell type is chosen only
         the first blocks dimension will be used. If a 2D cell type is chosen the
-        first and second blocks dimensinos will be used.
+        first and second blocks dimensions will be used.
         </Documentation>
       </IntVectorProperty>
       <IntVectorProperty command="SetCellOrder"
@@ -1012,6 +1061,35 @@
       <!-- End Mandelbrot -->
     </SourceProxy>
     <!-- ==================================================================== -->
+    <SourceProxy class="vtkImageSimpleSource"
+                 label="Simple Image"
+                 name="SimpleImage">
+      <Documentation long_help="Create an image in 3 dimensions with scalar and vector data arrays, consuming minimal computational resources."
+                     short_help="Create an image with scalar and vector arrays.">The
+                     Simple Image source can be used to create a uniform rectilinear
+                     grid with scalar values derived from relatively light
+                     computations. The active scalar array is named "X", and
+                     is set to the X coordinate for each pixel. There are two
+                     additional point data sets. The data array named
+                     "DistanceSquared" is computed as the squared distance from
+                     each pixel to the origin. The data array named "Swirl"
+                     is a vector field computed as (Y,Z,X) at each pixel.
+                     </Documentation>
+      <IntVectorProperty command="SetWholeExtent"
+                         default_values="-10 10 -10 10 -10 10"
+                         name="WholeExtent"
+                         number_of_elements="6"
+                         panel_visibility="advanced">
+        <IntRangeDomain name="range" />
+        <Documentation>The six values in the property indicate the X, Y, and Z
+        extent of the output data. The first two numbers are the minimum and
+        maximum X extent; the next two are the minimum and maximum Y extent;
+        and the final two are the minimum and maximum Z extent. The numbers are
+        inclusive, so values of -10, 10, -10, 10, =10, 10 indicate that the
+        dimensions of the output will be 21 x 21 x 21.</Documentation>
+      </IntVectorProperty>
+    </SourceProxy>
+      <!-- ==================================================================== -->
     <SourceProxy class="vtkPlaneSource"
                  label="Plane"
                  name="PlaneSource">
@@ -1669,7 +1747,7 @@
                             information_only="1"
                             name="UserFriendlyText">
         <SimpleStringInformationHelper />
-        <Documentation>Reconstructs the query as a user friendly text eg. "IDs
+        <Documentation>Reconstructs the query as a user friendly text, e.g., "IDs
         &gt;= 12".</Documentation>
       </StringVectorProperty>
       <IntVectorProperty command="SetInverse"
@@ -1757,7 +1835,7 @@
       <Documentation>FrustumSelectionSource is a source producing a frustum
       selection.</Documentation>
       <DoubleVectorProperty argument_is_array="1"
-                            command="SetFrustum"
+                            command="AddFrustum"
                             default_values="0.0 0.0 1.0 0.0
          0.0 0.0 0.0 0.0
          0.0 1.0 1.0 0.0
@@ -2018,15 +2096,15 @@
       &quot;UF1&quot;, &quot;RG1&quot;, &quot;SG1&quot;, &quot;PD1&quot;, and
       &quot;UG1&quot; will produce vtkUniformGrid, vtkRectilinearGrid,
       vtkStructuredGrid, vtkPolyData and vtkUnstructuredGrid respectively.
-      &quot;PD2&quot; will produce an alternate vtkPolydata. You can compose
+      &quot;PD2&quot; will produce an alternate vtkPolyData. You can compose
       composite datasets from the atomic ones listed above - &quot;MB{}&quot;
       or &quot;HB[]&quot;. &quot;MB{ ID1 PD1 MB{} }&quot; for example will
       create a vtkMultiBlockDataSet consisting of three blocks: image data,
-      poly data, multi-block (empty). Hierarchical Box data sets additionally
+      poly data, multiblock (empty). Hierarchical Box data sets additionally
       require the notion of groups, declared within &quot;()&quot; braces, to
       specify AMR depth. &quot;HB[ (UF1)(UF1)(UF1) ]&quot; will create a
       vtkHierarchicalBoxDataSet representing an octree that is three levels
-      deep, in which the firstmost cell in each level is
+      deep, in which the first cell in each level is
       refined.</Documentation>
       <StringVectorProperty command="SetProgram"
                             default_values="ID1"
@@ -2050,6 +2128,7 @@
                             name="FileName"
                             number_of_elements="1">
         <Documentation>Set the name of image file to load.</Documentation>
+        <FileListDomain name="files" />
       </StringVectorProperty>
       <!-- End of NetworkImageSource -->
     </SourceProxy>

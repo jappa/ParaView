@@ -30,6 +30,7 @@ from vtkmodules.vtkWebCore                  import vtkDataEncoder, vtkWebInterac
 from vtkmodules.vtkPVServerManagerRendering import vtkSMPVRepresentationProxy, vtkSMTransferFunctionProxy, vtkSMTransferFunctionManager
 from vtkmodules.vtkPVServerManagerCore      import vtkSMProxyManager
 from vtkmodules.vtkCommonDataModel          import vtkDataObject
+from vtkmodules.vtkPVClientServerCoreCore   import vtkProcessModule
 
 if sys.version_info >= (3,):
     xrange = range
@@ -181,6 +182,10 @@ class ParaViewWebProtocol(vtk_protocols.vtkWebProtocol):
 
 class ParaViewWebMouseHandler(ParaViewWebProtocol):
 
+    def __init__(self, **kwargs):
+        super(ParaViewWebMouseHandler, self).__init__()
+        self.lastAction = 'up'
+
     # RpcName: mouseInteraction => viewport.mouse.interaction
     @exportRpc("viewport.mouse.interaction")
     def mouseInteraction(self, event):
@@ -188,6 +193,7 @@ class ParaViewWebMouseHandler(ParaViewWebProtocol):
         RPC Callback for mouse interactions.
         """
         view = self.getView(event['view'])
+        realViewId = view.GetGlobalIDAsString()
 
         if hasattr(view, 'UseInteractiveRenderingForScreenshots'):
             if event["action"] == 'down':
@@ -222,8 +228,16 @@ class ParaViewWebMouseHandler(ParaViewWebProtocol):
         retVal = self.getApplication().HandleInteractionEvent(view.SMProxy, pvevent)
         del pvevent
 
+        if event["action"] == 'down' and self.lastAction != event["action"]:
+            self.getApplication().InvokeEvent('StartInteractionEvent')
+
+        if event["action"] == 'up' and self.lastAction != event["action"]:
+            self.getApplication().InvokeEvent('EndInteractionEvent')
+
         if retVal:
-            self.getApplication().InvokeEvent('PushRender')
+            self.getApplication().InvokeEvent('UpdateEvent')
+
+        self.lastAction = event["action"]
 
         return retVal
 
@@ -235,7 +249,7 @@ class ParaViewWebMouseHandler(ParaViewWebProtocol):
 
 class ParaViewWebViewPort(ParaViewWebProtocol):
 
-    def __init__(self, scale=1.0, maxWidth=2560, maxHeight=1440):
+    def __init__(self, scale=1.0, maxWidth=2560, maxHeight=1440, **kwargs):
         super(ParaViewWebViewPort, self).__init__()
         self.scale = scale
         self.maxWidth = maxWidth
@@ -256,7 +270,7 @@ class ParaViewWebViewPort(ParaViewWebProtocol):
             pass
 
         self.getApplication().InvalidateCache(view.SMProxy)
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return view.GetGlobalIDAsString()
 
@@ -270,7 +284,7 @@ class ParaViewWebViewPort(ParaViewWebProtocol):
         view.OrientationAxesVisibility = (showAxis if 1 else 0);
 
         self.getApplication().InvalidateCache(view.SMProxy)
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return view.GetGlobalIDAsString()
 
@@ -284,7 +298,7 @@ class ParaViewWebViewPort(ParaViewWebProtocol):
         view.CenterAxesVisibility = (showAxis if 1 else 0);
 
         self.getApplication().InvalidateCache(view.SMProxy)
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return view.GetGlobalIDAsString()
 
@@ -297,7 +311,7 @@ class ParaViewWebViewPort(ParaViewWebProtocol):
         view.CameraViewUp = view_up
         view.CameraPosition = position
         self.getApplication().InvalidateCache(view.SMProxy)
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     @exportRpc("viewport.camera.get")
     def getCamera(self, view_id):
@@ -322,7 +336,7 @@ class ParaViewWebViewPort(ParaViewWebProtocol):
             w *= s
             h *= s
         view.ViewSize = [ int(w), int(h) ]
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
 # =============================================================================
 #
@@ -389,14 +403,144 @@ class ParaViewWebViewPortImageDelivery(ParaViewWebProtocol):
 #
 # =============================================================================
 
-class ParaViewWebPublishImageDelivery(ParaViewWebProtocol, vtk_protocols.vtkWebPublishImageDelivery):
-    def __init__(self, decode=True):
-        # multiple inheritance - ParaViewWebProtocol methods take priority, i.e. stillRender()
-        # PVW init called second so Application is initialized properly.
-        vtk_protocols.vtkWebPublishImageDelivery.__init__(self, decode)
+class ParaViewWebPublishImageDelivery(ParaViewWebProtocol):
+    def __init__(self, decode=True, **kwargs):
         ParaViewWebProtocol.__init__(self)
+        self.trackingViews = {}
+        self.lastStaleTime = 0
+        self.staleHandlerCount = 0
+        self.deltaStaleTimeBeforeRender = 0.5 # 0.5s
+        self.decode = decode
+        self.viewsInAnimations = []
+        self.targetFrameRate = 30.0
+        self.minFrameRate = 12.0
+        self.maxFrameRate = 30.0
+
+
+    def pushRender(self, vId, ignoreAnimation = False):
+        if vId not in self.trackingViews:
+            return
+
+        if not self.trackingViews[vId]["enabled"]:
+            return
+
+        if not ignoreAnimation and len(self.viewsInAnimations) > 0:
+            return
+
+        if "originalSize" not in self.trackingViews[vId]:
+            view = self.getView(vId)
+            self.trackingViews[vId]["originalSize"] = list(view.ViewSize);
+
+        if "ratio" not in self.trackingViews[vId]:
+            self.trackingViews[vId]["ratio"] = 1
+
+        ratio = self.trackingViews[vId]["ratio"]
+        mtime = self.trackingViews[vId]["mtime"]
+        quality = self.trackingViews[vId]["quality"]
+        size = [int(s * ratio) for s in self.trackingViews[vId]["originalSize"]]
+
+        reply = self.stillRender({ "view": vId, "mtime": mtime, "quality": quality, "size": size })
+        stale = reply["stale"]
+        if reply["image"]:
+            # depending on whether the app has encoding enabled:
+            if self.decode:
+                reply["image"] = base64.standard_b64decode(reply["image"]);
+
+            reply["image"] = self.addAttachment(reply["image"]);
+            reply["format"] = "jpeg"
+            # save mtime for next call.
+            self.trackingViews[vId]["mtime"] = reply["mtime"]
+            # echo back real ID, instead of -1 for 'active'
+            reply["id"] = vId
+            self.publish('viewport.image.push.subscription', reply)
+        if stale:
+            self.lastStaleTime = time.time()
+            if self.staleHandlerCount == 0:
+                self.staleHandlerCount += 1
+                reactor.callLater(self.deltaStaleTimeBeforeRender, lambda: self.renderStaleImage(vId))
+        else:
+            self.lastStaleTime = 0
+
+
+    def renderStaleImage(self, vId):
+        self.staleHandlerCount -= 1
+
+        if self.lastStaleTime != 0:
+            delta = (time.time() - self.lastStaleTime)
+            if delta >= self.deltaStaleTimeBeforeRender:
+                self.pushRender(vId)
+            else:
+                self.staleHandlerCount += 1
+                reactor.callLater(self.deltaStaleTimeBeforeRender - delta + 0.001, lambda: self.renderStaleImage(vId))
+
+
+    def animate(self):
+        if len(self.viewsInAnimations) == 0:
+            return
+
+        nextAnimateTime = time.time() + 1.0 /  self.targetFrameRate
+        for vId in set(self.viewsInAnimations):
+            self.pushRender(vId, True)
+
+        nextAnimateTime -= time.time()
+
+        if self.targetFrameRate > self.maxFrameRate:
+            self.targetFrameRate = self.maxFrameRate
+
+        if nextAnimateTime < 0:
+            if nextAnimateTime < -1.0:
+                self.targetFrameRate = 1
+            if self.targetFrameRate > self.minFrameRate:
+                self.targetFrameRate -= 1.0
+            reactor.callLater(0.001, lambda: self.animate())
+        else:
+            if self.targetFrameRate < self.maxFrameRate and nextAnimateTime > 0.005:
+                self.targetFrameRate += 1.0
+            reactor.callLater(nextAnimateTime, lambda: self.animate())
+
+
+    @exportRpc("viewport.image.animation.fps.max")
+    def setMaxFrameRate(self, fps = 30):
+        self.maxFrameRate = fps
+
+
+    @exportRpc("viewport.image.animation.fps.get")
+    def getCurrentFrameRate(self):
+        return self.targetFrameRate
+
+
+    @exportRpc("viewport.image.animation.start")
+    def startViewAnimation(self, viewId = '-1'):
+        sView = self.getView(viewId)
+        realViewId = sView.GetGlobalIDAsString()
+
+        self.viewsInAnimations.append(realViewId)
+        if len(self.viewsInAnimations) == 1:
+            self.animate()
+
+
+    @exportRpc("viewport.image.animation.stop")
+    def stopViewAnimation(self, viewId = '-1'):
+        sView = self.getView(viewId)
+        realViewId = sView.GetGlobalIDAsString()
+
+        if realViewId in self.viewsInAnimations:
+            self.viewsInAnimations.remove(realViewId)
+
 
     @exportRpc("viewport.image.push")
+    def imagePush(self, options):
+        view = self.getView(options["view"])
+        viewId = view.GetGlobalIDAsString()
+
+        # Make sure an image is pushed
+        self.getApplication().InvalidateCache(view.SMProxy)
+
+        self.pushRender(viewId)
+
+
+    # Internal function since the reply[image] is not
+    # JSON(serializable) it can not be an RPC one
     def stillRender(self, options):
         """
         RPC Callback to render a view and obtain the rendered image.
@@ -407,7 +551,8 @@ class ParaViewWebPublishImageDelivery(ParaViewWebProtocol, vtk_protocols.vtkWebP
         resize = size != options.get("size", size)
         if resize:
             size = options["size"]
-            view.ViewSize = size
+            if size[0] > 10 and size[1] > 10:
+              view.ViewSize = size
         t = 0
         if options and "mtime" in options:
             t = options["mtime"]
@@ -419,6 +564,8 @@ class ParaViewWebPublishImageDelivery(ParaViewWebProtocol, vtk_protocols.vtkWebP
             localTime = options["localTime"]
         reply = {}
         app = self.getApplication()
+        if t == 0:
+            app.InvalidateCache(view.SMProxy)
         if self.decode:
             stillRender = app.StillRenderToString
         else:
@@ -426,7 +573,7 @@ class ParaViewWebPublishImageDelivery(ParaViewWebProtocol, vtk_protocols.vtkWebP
         reply_image = stillRender(view.SMProxy, t, quality)
 
         # Check that we are getting image size we have set if not wait until we
-        # do.
+        # do. The render call will set the actual window size.
         tries = 10;
         while resize and list(app.GetLastStillRenderImageSize()) != size \
               and size != [0, 0] and tries > 0:
@@ -457,6 +604,157 @@ class ParaViewWebPublishImageDelivery(ParaViewWebProtocol, vtk_protocols.vtkWebP
         return reply
 
 
+    @exportRpc("viewport.image.push.observer.add")
+    def addRenderObserver(self, viewId):
+        sView = self.getView(viewId)
+        if not sView:
+            return { 'error': 'Unable to get view with id %s' % viewId }
+
+        realViewId = sView.GetGlobalIDAsString()
+
+        if not realViewId in self.trackingViews:
+            observerCallback = lambda *args, **kwargs: self.pushRender(realViewId)
+            startCallback = lambda *args, **kwargs: self.startViewAnimation(realViewId)
+            stopCallback = lambda *args, **kwargs: self.stopViewAnimation(realViewId)
+            tag = self.getApplication().AddObserver('UpdateEvent', observerCallback)
+            tagStart = self.getApplication().AddObserver('StartInteractionEvent', startCallback)
+            tagStop = self.getApplication().AddObserver('EndInteractionEvent', stopCallback)
+            # TODO do we need self.getApplication().AddObserver('ResetActiveView', resetActiveView())
+            self.trackingViews[realViewId] = { 'tags': [tag, tagStart, tagStop], 'observerCount': 1, 'mtime': 0, 'enabled': True, 'quality': 100 }
+        else:
+            # There is an observer on this view already
+            self.trackingViews[realViewId]['observerCount'] += 1
+
+        self.pushRender(realViewId)
+        return { 'success': True, 'viewId': realViewId }
+
+
+    @exportRpc("viewport.image.push.observer.remove")
+    def removeRenderObserver(self, viewId):
+        sView = self.getView(viewId)
+        if not sView:
+            return { 'error': 'Unable to get view with id %s' % viewId }
+
+        realViewId = sView.GetGlobalIDAsString()
+
+        observerInfo = None
+        if realViewId in self.trackingViews:
+            observerInfo = self.trackingViews[realViewId]
+
+        if not observerInfo:
+            return { 'error': 'Unable to find subscription for view %s' % realViewId }
+
+        observerInfo['observerCount'] -= 1
+
+        if observerInfo['observerCount'] <= 0:
+            for tag in observerInfo['tags']:
+                self.getApplication().RemoveObserver(tag)
+            del self.trackingViews[realViewId]
+
+        return { 'result': 'success' }
+
+
+    @exportRpc("viewport.image.push.quality")
+    def setViewQuality(self, viewId, quality, ratio = 1):
+        sView = self.getView(viewId)
+        if not sView:
+            return { 'error': 'Unable to get view with id %s' % viewId }
+
+        realViewId = sView.GetGlobalIDAsString()
+        observerInfo = None
+        if realViewId in self.trackingViews:
+            observerInfo = self.trackingViews[realViewId]
+
+        if not observerInfo:
+            return { 'error': 'Unable to find subscription for view %s' % realViewId }
+
+        observerInfo['quality'] = quality
+        observerInfo['ratio'] = ratio
+
+        # Update image size right now!
+        if "originalSize" in self.trackingViews[realViewId]:
+            size = [int(s * ratio) for s in self.trackingViews[realViewId]["originalSize"]]
+            if 'SetSize' in sView:
+                sView.SetSize(size)
+            else:
+                sView.ViewSize = size
+
+        return { 'result': 'success' }
+
+
+    @exportRpc("viewport.image.push.original.size")
+    def setViewSize(self, viewId, width, height):
+        sView = self.getView(viewId)
+        if not sView:
+            return { 'error': 'Unable to get view with id %s' % viewId }
+
+        realViewId = sView.GetGlobalIDAsString()
+        observerInfo = None
+        if realViewId in self.trackingViews:
+            observerInfo = self.trackingViews[realViewId]
+
+        if not observerInfo:
+            return { 'error': 'Unable to find subscription for view %s' % realViewId }
+
+        observerInfo['originalSize'] = [width, height]
+
+        return { 'result': 'success' }
+
+
+    @exportRpc("viewport.image.push.enabled")
+    def enableView(self, viewId, enabled):
+        sView = self.getView(viewId)
+        if not sView:
+            return { 'error': 'Unable to get view with id %s' % viewId }
+
+        realViewId = sView.GetGlobalIDAsString()
+        observerInfo = None
+        if realViewId in self.trackingViews:
+            observerInfo = self.trackingViews[realViewId]
+
+        if not observerInfo:
+            return { 'error': 'Unable to find subscription for view %s' % realViewId }
+
+        observerInfo['enabled'] = enabled
+
+        return { 'result': 'success' }
+
+
+    @exportRpc("viewport.image.push.invalidate.cache")
+    def invalidateCache(self, viewId):
+        sView = self.getView(viewId)
+        if not sView:
+            return { 'error': 'Unable to get view with id %s' % viewId }
+
+        self.getApplication().InvalidateCache(sView.SMProxy)
+        self.getApplication().InvokeEvent('UpdateEvent')
+        return { 'result': 'success' }
+
+# =============================================================================
+#
+# Provide Progress support
+#
+# =============================================================================
+
+class ParaViewWebProgressUpdate(ParaViewWebProtocol):
+    progressObserverTag = None
+
+    def __init__(self, **kwargs):
+        super(ParaViewWebProgressUpdate, self).__init__()
+        self.listenToProgress()
+
+    def listenToProgress(self):
+        progressHandler = simple.servermanager.ActiveConnection.Session.GetProgressHandler()
+        if not ParaViewWebProgressUpdate.progressObserverTag:
+            ParaViewWebProgressUpdate.progressObserverTag = progressHandler.AddObserver(
+                'ProgressEvent',
+                lambda handler, event: self.updateProgress(handler))
+
+    def updateProgress(self, caller):
+        txt = caller.GetLastProgressText()
+        progress = caller.GetLastProgress()
+        self.publish('paraview.progress', { 'text': txt, 'progress': progress })
+
 # =============================================================================
 #
 # Provide Geometry delivery mechanism (WebGL)
@@ -465,7 +763,7 @@ class ParaViewWebPublishImageDelivery(ParaViewWebProtocol, vtk_protocols.vtkWebP
 
 class ParaViewWebViewPortGeometryDelivery(ParaViewWebProtocol):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(ParaViewWebViewPortGeometryDelivery, self).__init__()
 
         self.dataCache = {}
@@ -562,7 +860,7 @@ class ParaViewWebViewPortGeometryDelivery(ParaViewWebProtocol):
 # =============================================================================
 
 class ParaViewWebLocalRendering(ParaViewWebProtocol):
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(ParaViewWebLocalRendering, self).__init__()
         self.context = SynchronizationContext()
         self.trackingViews = {}
@@ -572,8 +870,10 @@ class ParaViewWebLocalRendering(ParaViewWebProtocol):
 
     # RpcName: getArray => viewport.geometry.array.get
     @exportRpc("viewport.geometry.array.get")
-    def getArray(self, dataHash):
-        return self.context.getCachedDataArray(dataHash)
+    def getArray(self, dataHash, binary = False):
+        if binary:
+            return self.addAttachment(self.context.getCachedDataArray(dataHash, binary))
+        return self.context.getCachedDataArray(dataHash, binary)
 
     # RpcName: addViewObserver => viewport.geometry.view.observer.add
     @exportRpc("viewport.geometry.view.observer.add")
@@ -593,8 +893,8 @@ class ParaViewWebLocalRendering(ParaViewWebProtocol):
 
         if not realViewId in self.trackingViews:
             observerCallback = lambda *args, **kwargs: self.publish('viewport.geometry.view.subscription', pushGeometry())
-            tag = self.getApplication().AddObserver('PushRender', observerCallback)
-            self.trackingViews[realViewId] = { 'tag': tag, 'observerCount': 1 }
+            tag = self.getApplication().AddObserver('UpdateEvent', observerCallback)
+            self.trackingViews[realViewId] = { 'tags': [tag], 'observerCount': 1 }
         else:
             # There is an observer on this view already
             self.trackingViews[realViewId]['observerCount'] += 1
@@ -621,7 +921,8 @@ class ParaViewWebLocalRendering(ParaViewWebProtocol):
         observerInfo['observerCount'] -= 1
 
         if observerInfo['observerCount'] <= 0:
-            self.getApplication().RemoveObserver(observerInfo['tag'])
+            for tag in observerInfo['tags']:
+                self.getApplication().RemoveObserver(tag)
             del self.trackingViews[realViewId]
 
         return { 'result': 'success' }
@@ -661,7 +962,7 @@ class ParaViewWebLocalRendering(ParaViewWebProtocol):
 
 class ParaViewWebTimeHandler(ParaViewWebProtocol):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(ParaViewWebTimeHandler, self).__init__()
         # setup animation scene
         self.scene = simple.GetAnimationScene()
@@ -698,7 +999,7 @@ class ParaViewWebTimeHandler(ParaViewWebProtocol):
         timestep = list(animationScene.TimeKeeper.TimestepValues).index(animationScene.TimeKeeper.Time)
         self.publish("pv.time.change", { 'time': float(view.ViewTime), 'timeStep': timestep } )
 
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return view.ViewTime
 
@@ -707,7 +1008,7 @@ class ParaViewWebTimeHandler(ParaViewWebProtocol):
         anim = simple.GetAnimationScene()
         anim.TimeKeeper.Time = anim.TimeKeeper.TimestepValues[timeIdx]
 
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return anim.TimeKeeper.Time
 
@@ -726,7 +1027,7 @@ class ParaViewWebTimeHandler(ParaViewWebProtocol):
         try:
             step = list(anim.TimeKeeper.TimestepValues).index(t)
             anim.TimeKeeper.Time = anim.TimeKeeper.TimestepValues[step]
-            self.getApplication().InvokeEvent('PushRender')
+            self.getApplication().InvokeEvent('UpdateEvent')
         except:
             print ('Try to update time with', t, 'but value not found in the list')
 
@@ -746,10 +1047,12 @@ class ParaViewWebTimeHandler(ParaViewWebProtocol):
         if not self.playing:
             self.playTime = deltaT
             self.playing = True
+            self.getApplication().InvokeEvent('StartInteractionEvent')
             self.nextPlay()
 
     @exportRpc("pv.time.stop")
     def stop(self):
+        self.getApplication().InvokeEvent('EndInteractionEvent')
         self.playing = False
 
 # =============================================================================
@@ -760,12 +1063,15 @@ class ParaViewWebTimeHandler(ParaViewWebProtocol):
 
 class ParaViewWebColorManager(ParaViewWebProtocol):
 
-    def __init__(self, pathToColorMaps=None):
+    def __init__(self, pathToColorMaps=None, showBuiltin=True, **kwargs):
         super(ParaViewWebColorManager, self).__init__()
+        if pathToColorMaps:
+            simple.ImportPresets(filename=pathToColorMaps)
         self.presets = servermanager.vtkSMTransferFunctionPresets()
         self.colorMapNames = []
         for i in range(self.presets.GetNumberOfPresets()):
-            self.colorMapNames.append(self.presets.GetPresetName(i))
+            if showBuiltin or not self.presets.IsPresetBuiltin(i):
+                self.colorMapNames.append(self.presets.GetPresetName(i))
 
     # RpcName: getScalarBarVisibilities => pv.color.manager.scalarbar.visibility.get
     @exportRpc("pv.color.manager.scalarbar.visibility.get")
@@ -805,7 +1111,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
 
         # Render to get scalar bars in correct position when doing local rendering (webgl)
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return visibilities
 
@@ -851,7 +1157,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
             currentRange = self.getCurrentScalarRange(proxyId)
             status['range'] = currentRange
 
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return status
 
@@ -893,7 +1199,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
         self.updateScalarBars()
 
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     # RpcName: setOpacityFunctionPoints => pv.color.manager.opacity.points.set
     @exportRpc("pv.color.manager.opacity.points.set")
@@ -918,7 +1224,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
         lutProxy.EnableOpacityMapping = enableOpacityMapping
 
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     # RpcName: getOpacityFunctionPoints => pv.color.manager.opacity.points.get
     @exportRpc("pv.color.manager.opacity.points.get")
@@ -1055,7 +1361,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
         continuousInfo = rgbInfo['continuous']
         categoricalInfo = rgbInfo['categorical']
 
-        # First make sure the continous mode properties are set
+        # First make sure the continuous mode properties are set
         continuousScalars = continuousInfo['scalars']
         continuousColors = continuousInfo['colors']
 
@@ -1089,7 +1395,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
             lutProxy.InterpretValuesAsCategories = 1
 
         simple.Render();
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     # RpcName: getLutImage => pv.color.manager.lut.image.get
     @exportRpc("pv.color.manager.lut.image.get")
@@ -1177,7 +1483,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
         lutProxy.EnableOpacityMapping = enabled
 
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     # RpcName: getSurfaceOpacity => pv.color.manager.surface.opacity.get
     @exportRpc("pv.color.manager.surface.opacity.get")
@@ -1195,7 +1501,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
         lutProxy.EnableOpacityMapping = enabled
 
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     # RpcName: getSurfaceOpacityByArray => pv.color.manager.surface.opacity.by.array.get
     @exportRpc("pv.color.manager.surface.opacity.by.array.get")
@@ -1215,7 +1521,7 @@ class ParaViewWebColorManager(ParaViewWebProtocol):
         if lutProxy is not None:
             lutProxy.ApplyPreset(paletteName, True)
             simple.Render()
-            self.getApplication().InvokeEvent('PushRender')
+            self.getApplication().InvokeEvent('UpdateEvent')
             return { 'result': 'success' }
         else:
             return { 'result': 'Representation proxy ' + representation + ' is missing lookup table' }
@@ -1256,7 +1562,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
                        'unspecified',     # 14
                        'signed_char' ]    # 15
 
-    def __init__(self, allowedProxiesFile=None, baseDir=None, fileToLoad=None, allowUnconfiguredReaders=True, groupProxyEditorWidgets=True, respectPropertyGroups=True):
+    def __init__(self, allowedProxiesFile=None, baseDir=None, fileToLoad=None, allowUnconfiguredReaders=True, groupProxyEditorWidgets=True, respectPropertyGroups=True, **kwargs):
         """
         basePath: specify the base directory (or directories) that we should start with, if this
         parameter takes the form: "name1=path1|name2=path2|...", then we will treat this as the
@@ -1338,7 +1644,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
         if type(filepathOrConfig) == dict:
             configurationData = filepathOrConfig
         else:
-            with open(filepath, 'r') as fd:
+            with open(filepathOrConfig, 'r') as fd:
                 configurationData = json.load(fd)
         self.configureFiltersOrSources('sources', configurationData['sources'])
         self.configureFiltersOrSources('filters', configurationData['filters'])
@@ -1389,7 +1695,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
         return xmlElement
 
     #--------------------------------------------------------------------------
-    # Look higher up in XML heirarchy for attributes on a property (useful if
+    # Look higher up in XML hierarchy for attributes on a property (useful if
     # a property is an exposed property).  From the documentation of vtkSMProperty,
     # the GetParent method will access the sub-proxy to which the property
     # actually belongs, if that is the case.
@@ -2133,25 +2439,26 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
         # Before we're done we need to check for groups of properties where every
         # property in the group has a panel_visibilty of 'advanced', in which
         # case, the group should be marked the same.
-        for groupName in groupMap:
-            if groupName is not 'root' and 'ui' in groupMap[groupName]:
-                groupUiList = groupMap[groupName]['ui']
-                firstUiElt = groupUiList[0]
-                groupDependency = False
-                if 'depends' in firstUiElt and firstUiElt['depends']:
-                    groupDependency = True
-                advancedGroup = True
-                for uiProp in groupUiList:
-                    if uiProp['advanced'] == 0:
-                        advancedGroup = False
-                    if groupDependency and ('depends' not in uiProp or uiProp['depends'] != firstUiElt['depends']):
-                        groupDependency = False
+        if uiList:
+            for groupName in groupMap:
+                if groupName is not 'root' and 'ui' in groupMap[groupName]:
+                    groupUiList = groupMap[groupName]['ui']
+                    firstUiElt = groupUiList[0]
+                    groupDependency = False
+                    if 'depends' in firstUiElt and firstUiElt['depends']:
+                        groupDependency = True
+                    advancedGroup = True
+                    for uiProp in groupUiList:
+                        if uiProp['advanced'] == 0:
+                            advancedGroup = False
+                        if groupDependency and ('depends' not in uiProp or uiProp['depends'] != firstUiElt['depends']):
+                            groupDependency = False
 
-                if advancedGroup:
-                    groupMap[groupName]['groupItem']['advanced'] = 1
+                    if advancedGroup:
+                        groupMap[groupName]['groupItem']['advanced'] = 1
 
-                if groupDependency:
-                    groupMap[groupName]['groupItem']['depends'] = firstUiElt['depends']
+                    if groupDependency:
+                        groupMap[groupName]['groupItem']['depends'] = firstUiElt['depends']
 
         return { 'proxy': props, 'ui': uis }
 
@@ -2166,7 +2473,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
             return functionName.strip()
 
     @exportRpc("pv.proxy.manager.create")
-    def create(self, functionName, parentId):
+    def create(self, functionName, parentId, initialValues = {}, skipDomain = False, subProxyValues = {}):
         """
         Creates a new filter/source proxy as a child of the specified
         parent proxy.  Returns the proxy state for the newly created
@@ -2187,15 +2494,26 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
 
         # Create new source/filter
         allowed = self.allowedProxies[name]
-        newProxy = paraview.simple.__dict__[allowed]()
+        newProxy = paraview.simple.__dict__[allowed](**initialValues)
+
+        # Update subproxy values
+        if newProxy:
+            for subProxyName in subProxyValues:
+                subProxy = newProxy.GetProperty(subProxyName).GetData()
+                if subProxy:
+                    for propName in subProxyValues[subProxyName]:
+                        prop = subProxy.SMProxy.GetProperty(propName)
+                        prop.SetElements(subProxyValues[subProxyName][propName])
+                    subProxy.UpdateVTKObjects()
 
         # To make WebGL export work
         simple.Show()
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         try:
-            self.applyDomains(parentProxy, newProxy.GetGlobalIDAsString())
+            if not skipDomain:
+                self.applyDomains(parentProxy, newProxy.GetGlobalIDAsString())
         except Exception as inst:
             print ('Caught exception applying domains:')
             print (inst)
@@ -2233,7 +2551,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
             simple.SetActiveView(newView)
             if self.getApplication():
                 self.getApplication().InvokeEvent('ResetActiveView')
-                self.getApplication().InvokeEvent('PushRender')
+                self.getApplication().InvokeEvent('UpdateEvent')
 
             return { 'success': True, 'view': newView.GetGlobalIDAsString() }
 
@@ -2269,7 +2587,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
         simple.Render()
         simple.ResetCamera()
         if self.getApplication():
-            self.getApplication().InvokeEvent('PushRender')
+            self.getApplication().InvokeEvent('UpdateEvent')
 
         return { 'success': True, 'id': reader.GetGlobalIDAsString() }
 
@@ -2339,7 +2657,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
             return { 'success': False,
                      'errorList': failureList }
 
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return { 'success': True }
 
@@ -2361,10 +2679,10 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
         if proxy is not None and canDelete is True:
             simple.Delete(proxy)
             self.updateScalarBars()
-            self.getApplication().InvokeEvent('PushRender')
+            self.getApplication().InvokeEvent('UpdateEvent')
             return { 'success': 1, 'id': pid }
 
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
         return { 'success': 0, 'id': '0' }
 
     @exportRpc("pv.proxy.manager.list")
@@ -2437,7 +2755,7 @@ class ParaViewWebProxyManager(ParaViewWebProtocol):
 
 class ParaViewWebKeyValuePairStore(ParaViewWebProtocol):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(ParaViewWebKeyValuePairStore, self).__init__()
         self.keyValStore = {}
 
@@ -2463,7 +2781,7 @@ class ParaViewWebKeyValuePairStore(ParaViewWebProtocol):
 
 class ParaViewWebSaveData(ParaViewWebProtocol):
 
-    def __init__(self, baseSavePath=''):
+    def __init__(self, baseSavePath='', **kwargs):
         super(ParaViewWebSaveData, self).__init__()
 
         savePath = baseSavePath
@@ -2611,7 +2929,7 @@ class ParaViewWebStartupRemoteConnection(ParaViewWebProtocol):
 
     connected = False
 
-    def __init__(self, dsHost = None, dsPort = 11111, rsHost=None, rsPort=22222, rcPort=-1):
+    def __init__(self, dsHost = None, dsPort = 11111, rsHost=None, rsPort=22222, rcPort=-1, **kwargs):
         super(ParaViewWebStartupRemoteConnection, self).__init__()
         if not ParaViewWebStartupRemoteConnection.connected and dsHost:
             ParaViewWebStartupRemoteConnection.connected = True
@@ -2631,7 +2949,7 @@ class ParaViewWebStartupPluginLoader(ParaViewWebProtocol):
 
     loaded = False
 
-    def __init__(self, plugins=None, pathSeparator=':'):
+    def __init__(self, plugins=None, pathSeparator=':', **kwargs):
         super(ParaViewWebStartupPluginLoader, self).__init__()
         if not ParaViewWebStartupPluginLoader.loaded and plugins:
             ParaViewWebStartupPluginLoader.loaded = True
@@ -2646,7 +2964,7 @@ class ParaViewWebStartupPluginLoader(ParaViewWebProtocol):
 
 class ParaViewWebStateLoader(ParaViewWebProtocol):
 
-    def __init__(self, state_path = None):
+    def __init__(self, state_path = None, **kwargs):
         super(ParaViewWebStateLoader, self).__init__()
         if state_path and state_path[-5:] == '.pvsm':
             self.loadState(state_path)
@@ -2662,7 +2980,7 @@ class ParaViewWebStateLoader(ParaViewWebProtocol):
         for view in simple.GetRenderViews():
             ids.append(view.GetGlobalIDAsString())
 
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
         return ids
 
@@ -2674,7 +2992,7 @@ class ParaViewWebStateLoader(ParaViewWebProtocol):
 
 class ParaViewWebFileListing(ParaViewWebProtocol):
 
-    def __init__(self, basePath, name, excludeRegex=r"^\.|~$|^\$", groupRegex=r"[0-9]+\."):
+    def __init__(self, basePath, name, excludeRegex=r"^\.|~$|^\$", groupRegex=r"[0-9]+\.", **kwargs):
         """
         Configure the way the WebFile browser will expose the server content.
          - basePath: specify the base directory (or directories) that we should start with, if this
@@ -2793,7 +3111,7 @@ from vtkmodules.vtkCommonCore import *
 
 class ParaViewWebSelectionHandler(ParaViewWebProtocol):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.active_view = None
         self.previous_interaction = -1
         self.selection_type = -1
@@ -2842,7 +3160,7 @@ class ParaViewWebSelectionHandler(ParaViewWebProtocol):
                     extract = simple.ExtractSelection(Input=rep.Input, Selection=selection)
                     simple.Show(extract)
                     simple.Render()
-                    self.getApplication().InvokeEvent('PushRender')
+                    self.getApplication().InvokeEvent('UpdateEvent')
                 else:
                     rep.Input.SMProxy.SetSelectionInput(0, selection.SMProxy, 0)
 
@@ -2854,7 +3172,7 @@ class ParaViewWebSelectionHandler(ParaViewWebProtocol):
 
 class ParaViewWebExportData(ParaViewWebProtocol):
 
-    def __init__(self, basePath):
+    def __init__(self, basePath, **kwargs):
         self.base_export_path = basePath
 
     # RpcName: exportData => pv.export.data
@@ -2888,7 +3206,7 @@ class ParaViewWebTestProtocols(ParaViewWebProtocol):
         view = simple.GetRenderView()
         simple.SetActiveView(view)
         simple.Render()
-        self.getApplication().InvokeEvent('PushRender')
+        self.getApplication().InvokeEvent('UpdateEvent')
 
     # RpcName: getColoringInfo => pv.test.color.info.get
     @exportRpc("pv.test.color.info.get")

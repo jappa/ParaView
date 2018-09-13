@@ -265,7 +265,7 @@ bool vtkSIProxy::InitializeAndCreateVTKObjects(vtkSMMessage* message)
     return false;
   }
 
-  // Store definition informations
+  // Store definition information
   this->SetXMLGroup(message->GetExtension(ProxyState::xml_group).c_str());
   this->SetXMLName(message->GetExtension(ProxyState::xml_name).c_str());
   this->SetXMLSubProxyName(message->HasExtension(ProxyState::xml_sub_proxy_name)
@@ -335,7 +335,7 @@ bool vtkSIProxy::InitializeAndCreateVTKObjects(vtkSMMessage* message)
   }
 
   // Process the XML and update properties etc.
-  // This needs be called after the VTK ojects have been created since the default values
+  // This needs be called after the VTK objects have been created since the default values
   // for all properties are read (and pushed) from when reading the XML attributes
   // themselves.
   if (!this->ReadXMLAttributes(element))
@@ -364,7 +364,7 @@ bool vtkSIProxy::CreateVTKObjects()
   assert(this->ObjectsCreated == false);
   if (this->VTKClassName && this->VTKClassName[0])
   {
-    vtkObjectBase* obj = this->Interpreter->NewInstance(this->VTKClassName);
+    vtkObjectBase* obj = this->NewVTKObject(this->VTKClassName);
     if (!obj)
     {
       vtkErrorMacro("Failed to create '"
@@ -419,6 +419,12 @@ bool vtkSIProxy::CreateVTKObjects()
   }
 
   return true;
+}
+
+//----------------------------------------------------------------------------
+vtkObjectBase* vtkSIProxy::NewVTKObject(const char* className)
+{
+  return this->Interpreter->NewInstance(className);
 }
 
 //----------------------------------------------------------------------------

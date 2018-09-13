@@ -206,7 +206,7 @@ int vtkCompleteArrays::RequestData(
   vtkDataSet* inputDS = vtkDataSet::SafeDownCast(input);
 
   vtkTable* inputTable = vtkTable::SafeDownCast(input);
-  // let vtkTable pass-trough this filter
+  // let vtkTable pass-through this filter
   if (inputTable)
   {
     vtkTable* outputTable = vtkTable::SafeDownCast(output);
@@ -219,6 +219,7 @@ int vtkCompleteArrays::RequestData(
   vtkDebugMacro(<< "Completing array");
 
   outputDS->CopyStructure(inputDS);
+  outputDS->GetFieldData()->PassData(inputDS->GetFieldData());
   outputDS->GetPointData()->PassData(inputDS->GetPointData());
   outputDS->GetCellData()->PassData(inputDS->GetCellData());
 

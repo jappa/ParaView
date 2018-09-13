@@ -51,7 +51,7 @@ public:
 
     #undef DEFINE_OPERATOR
 
-    /** special treatement for strings */
+    /** special treatment for strings */
     GW_Ofstream& operator << (string& v)
     {
         GW_U32 nSize = (GW_U32) v.size();
@@ -88,7 +88,7 @@ public:
 
     #undef DEFINE_OPERATOR
 
-    /** special treatement for strings */
+    /** special treatment for strings */
     GW_Ifstream& operator >> (string& v)
     {
         GW_U32 nSize;
@@ -147,7 +147,7 @@ public:
     {
         // nothing
     }
-    /** get the name of the class, usefull for the class factory */
+    /** get the name of the class, useful for the class factory */
     virtual string GetClassName()
     {
         return string("undefined");

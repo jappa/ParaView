@@ -262,9 +262,32 @@
         <BooleanDomain name="bool" />
         <Documentation>
           Specify whether color information should be saved in the PLY file.
-          If enable, the data source's coloring state i.e. the array to color with and the transfer function
-          from the active view will be used.
+          If enabled, the data source's array to color with from the active view will be used.
         </Documentation>
+        <Hints>
+        <PropertyWidgetDecorator type="GenericDecorator"
+                                   mode="enabled_state"
+                                   property="LookupTable"
+                                   inverse="1"
+                                   value="null" />
+        </Hints>
+      </IntVectorProperty>
+      <IntVectorProperty name="EnableAlpha"
+                         command="SetEnableAlpha"
+                         number_of_elements="1"
+                         default_values="0">
+        <BooleanDomain name="bool" />
+        <Documentation>
+          Specify whether alpha channel information should be saved in the PLY file.
+          If enabled, the data source's transfer function from the active view will be used.
+          This property is disabled if EnableColoring isn't enabled.
+        </Documentation>
+        <Hints>
+          <PropertyWidgetDecorator type="GenericDecorator"
+                                   mode="enabled_state"
+                                   property="EnableColoring"
+                                   value="1" />
+        </Hints>
       </IntVectorProperty>
       <StringVectorProperty command="SetInputArrayToProcess"
                             element_types="0 0 0 0 2"
@@ -304,6 +327,21 @@
         </ProxyGroupDomain>
       </ProxyProperty>
       <!-- End of PLYWriter -->
+    </Proxy>
+    <!-- ================================================================= -->
+    <Proxy class="vtkOBJWriter"
+           name="OBJWriter">
+      <Documentation short_help="Write polygonal data in Wavefront OBJ format.">
+      </Documentation>
+      <StringVectorProperty command="SetFileName"
+                            name="FileName"
+                            number_of_elements="1">
+        <Documentation>The name of the file to be written.</Documentation>
+      </StringVectorProperty>
+      <InputProperty name="DummyInput" panel_visibility="never">
+        <InputArrayDomain attribute_type="any" name="input_array" />
+      </InputProperty>
+      <!-- End of OBJWriter -->
     </Proxy>
     <!-- ================================================================= -->
     <Proxy base_proxygroup="internal_writers"
@@ -360,17 +398,62 @@
                          number_of_elements="1">
         <EnumerationDomain name="enum">
           <Entry text="None"
-                 value="0" />
-          <Entry text="ZLib"
-                 value="1" />
+                 value="0"
+                 info="fastest write" />
           <Entry text="LZ4"
-                 value="2" />
+                 value="2"
+                 info="fastest compressed write" />
+          <Entry text="ZLib"
+                 value="1"
+                 info="balanced performance" />
+          <Entry text="LZMA"
+                 value="3"
+                 info="smallest filesize" />
         </EnumerationDomain>
         <Documentation>The compression algorithm used to compress binary data
-        (appended mode only).</Documentation>
+        (appended mode only). None offers fastest write, LZ4 offers fastest
+        compressed write, ZLib offers balanced performance, LZMA offers
+        smallest compressed filesize.</Documentation>
       </IntVectorProperty>
-      <!-- End of XMLDataObjectWriterCore -->
-    </Proxy>
+      <IntVectorProperty command="SetCompressionLevel"
+                         default_values="6"
+                         name="CompressionLevel"
+                         number_of_elements="1">
+        <EnumerationDomain name="enum">
+          <Entry text="1"
+                 value="1"
+                 info="fastest write" />
+          <Entry text="2"
+                 value="2" />
+          <Entry text="3"
+                 value="3" />
+          <Entry text="4"
+                 value="4" />
+          <Entry text="5"
+                 value="5"
+                 info="balanced performance" />
+          <Entry text="6"
+                 value="6" />
+          <Entry text="7"
+                 value="7" />
+          <Entry text="8"
+                 value="8" />
+          <Entry text="9"
+                 value="9"
+                 info="smallest filesize" />
+        </EnumerationDomain>
+        <Documentation>A compression performance parameter from 1 (faster/larger
+         compressed filesize) to 9 (slower/smaller compressed filesize).</Documentation>
+        <Hints>
+          <PropertyWidgetDecorator type="GenericDecorator"
+                                   mode="enabled_state"
+                                   property="CompressorType"
+                                   value="0"
+                                   inverse="1" />
+        </Hints>
+      </IntVectorProperty>
+      <!-- End of XMLDataSetWriterCore -->
+   </Proxy>
     <!-- ================================================================= -->
     <PWriterProxy base_proxygroup="internal_writers"
                   base_proxyname="XMLDataObjectWriterCore"

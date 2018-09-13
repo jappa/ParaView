@@ -146,15 +146,20 @@ def setattr(proxy, pname, value):
                     "'LockScalarRange' is obsolete as of ParaView 5.5. Use "\
                     "'AutomaticRescaleRangeMode' property instead.")
 
-    # In 5.5, we changed the vtkArrayCalcualtor to use a different set of constants to control which
+    # In 5.5, we changed the vtkArrayCalculator to use a different set of constants to control which
     # data it operates on.  This change changed the method and property name from AttributeMode to
     # AttributeType
     if pname == "AttributeMode" and proxy.SMProxy.GetXMLName() == "Calculator":
         if paraview.compatibility.GetVersion() <= 5.4:
             # The Attribute type uses enumeration values from vtkDataObject::AttributeTypes
             # rather than custom constants for the calculator.  For the values supported by
-            # ParaView before this change, the conversion works out to subtracting 1.
-            proxy.GetProperty("AttributeType").SetData(value - 1)
+            # ParaView before this change, the conversion works out to subtracting 1 if value
+            # is an integer. If value is an enumerated string we use that as is since it matches
+            # the previous enumerated string options.
+            if isinstance(value, int):
+                proxy.GetProperty("AttributeType").SetData(value - 1)
+            else:
+                proxy.GetProperty("AttributeType").SetData(value)
             raise Continue()
         else:
             raise NotSupportedException(\
@@ -185,6 +190,72 @@ def setattr(proxy, pname, value):
             else:
                 raise NotSupportedException("'%s' is obsolete. Use the `Blocks` "\
                         "property to select blocks using SIL instead.")
+
+    if pname == "DataBoundsInflateFactor" and proxy.SMProxy.GetProperty("DataBoundsScaleFactor"):
+        if paraview.compatibility.GetVersion() <= 5.4:
+            # In 5.5, The axes grid data bounds inflate factor have been
+            # translated by 1 to become the scale factor.
+            proxy.GetProperty("DataBoundsScaleFactor").SetData(value + 1)
+        else:
+            #if inflat factor is being used, raise NotSupportedException
+            raise NotSupportedException(\
+                "'DataBoundsInflateFactor' is obsolete as of ParaView 5.5. Use the "\
+                "'DataBoundsScaleFactor' property to modify the axes gris data bounds instead.")
+
+    if proxy.SMProxy and proxy.SMProxy.GetXMLName() == "AnnotateAttributeData":
+        # in 5.5, Annotate Attribute Data changed how it sets the array to annotate
+        if pname == "ArrayAssociation":
+            if paraview.compatibility.GetVersion() <= 5.4:
+                paraview.print_warning(\
+                "'ArrayAssociation' is obsolete.  Use 'SelectInputArray' property of AnnotateAttributeData instead.")
+
+                if value == "Point Data":
+                    value = "POINTS"
+                elif value == "Cell Data":
+                    value = "CELLS"
+                elif value == "Field Data":
+                    value = "FIELD"
+                elif value == "Row Data":
+                    value = "ROWS"
+
+                arrayProp = proxy.GetProperty("SelectInputArray")
+                proxy.GetProperty("SelectInputArray").SetData((value, arrayProp[1]))
+                raise Continue()
+            else:
+                raise NotSupportedException(\
+                    "'ArrayAssociation' is obsolete as of ParaView 5.5.  Use 'SelectInputArray' instead.")
+        elif pname == "ArrayName":
+            if paraview.compatibility.GetVersion() <= 5.4:
+                paraview.print_warning(\
+                "'ArrayName' is obsolete.  Use 'SelectInputArray' property of AnnotateAttributeData instead.")
+
+                arrayProp = proxy.GetProperty("SelectInputArray")
+                proxy.GetProperty("SelectInputArray").SetData((arrayProp[0], value))
+                raise Continue()
+            else:
+                raise NotSupportedException(\
+                    "'ArrayName' is obsolete as of ParaView 5.5.  Use 'SelectInputArray' instead.")
+
+    # In 5.5, we changed the Clip to be inverted from what it was before and changed the InsideOut
+    # property to be called Invert to be clearer.
+    if pname == "InsideOut" and proxy.SMProxy.GetXMLName() == "Clip":
+        if paraview.compatibility.GetVersion() <= 5.4:
+            proxy.GetProperty("Invert").SetData(1-value)
+            raise Continue()
+        else:
+            raise NotSupportedException(\
+                "'InsideOut' is obsolete.  Use 'Invert' property of Clip filter instead.")
+
+    # In 5.6, we changed the "SpreadSheetRepresentation" proxy to no longer have
+    # the "FieldAssociation" and "GenerateCellConnectivity" properties. They are
+    # now moved to the view.
+    if pname in ["FieldAssociation", "GenerateCellConnectivity"] and proxy.SMProxy.GetXMLName() == "SpreadSheetRepresentation":
+        if paraview.compatibility.GetVersion() <= 5.5:
+            raise Continue()
+        else:
+            raise NotSupportedException(
+                  "'%s' is obsolete on SpreadSheetRepresentation as of ParaView 5.6 and has been migrated to the view." % pname)
+
 
     if not hasattr(proxy, pname):
         raise AttributeError()
@@ -297,16 +368,20 @@ def getattr(proxy, pname):
                     'The PVLookupTable.LockScalarRange property has been removed '\
                     'in ParaView 5.5. Please set the AutomaticRescaleRangeMode property '\
                     'instead.')
-    # In 5.5, we changed the vtkArrayCalcualtor to use a different set of constants to control which
+    # In 5.5, we changed the vtkArrayCalculator to use a different set of constants to control which
     # data it operates on.  This change changed the method and property name from AttributeMode to
     # AttributeType
     if pname == "AttributeMode" and proxy.SMProxy.GetName() == "Calculator":
         if paraview.compatibility.GetVersion() <= 5.4:
             # The Attribute type uses enumeration values from vtkDataObject::AttributeTypes
             # rather than custom constants for the calculator.  For the values supported by
-            # ParaView before this change, the conversion works out to adding 1.
+            # ParaView before this change, the conversion works out to adding 1 if it is an
+            # integer. If the value is an enumerated string we use that as is since it matches
+            # the previous enumerated string options.
             value = proxy.GetProperty("AttributeType").GetData()
-            return value + 1
+            if isinstance(value, int):
+                return value + 1
+            return value
         else:
             raise NotSupportedException(
                     'The Calculator.AttributeMode property has been removed in ParaView 5.5. '\
@@ -340,6 +415,68 @@ def getattr(proxy, pname):
         else:
             raise NotSupportedException(\
               "'%s' is obsolete. Use `Blocks` to make block based selection." % pname)
+
+    # In 5.5, we removed the DataBoundsInflateFactor property and replaced it with the
+    # DataBoundsScaleFactor property.
+    if pname == "DataBoundsInflateFactor" and proxy.SMProxy.GetProperty("DataBoundsScaleFactor"):
+        if version <= 5.4:
+            inflateValue = proxy.GetProperty("DataBoundsScaleFactor").GetData() - 1
+            if inflateValue >= 0:
+                return inflateValue
+            else:
+                return 0
+        else:
+            raise NotSupportedException(
+                    'The  DataBoundsInflateFactorproperty has been removed in ParaView '\
+                    '5.4. Please use the DataBoundsScaleFactor property instead.')
+
+    if proxy.SMProxy and proxy.SMProxy.GetXMLName() == "AnnotateAttributeData":
+        # in 5.5, Annotate Attribute Data changed how it sets the array to annotate
+        if pname == "ArrayAssociation":
+            if paraview.compatibility.GetVersion() <= 5.4:
+                paraview.print_warning(\
+                "'ArrayAssociation' is obsolete.  Use 'SelectInputArray' property of AnnotateAttributeData instead.")
+
+                value = proxy.GetProperty("SelectInputArray")[0]
+                if value == "CELLS":
+                    return "Cell Data"
+                elif value == "FIELD":
+                    return "Field Data"
+                elif value == "ROWS":
+                    return "Row Data"
+                else:
+                    return "Point Data"
+            else:
+                raise NotSupportedException(\
+                    "'ArrayAssociation' is obsolete as of ParaView 5.5.  Use 'SelectInputArray' instead.")
+        elif pname == "ArrayName":
+            if paraview.compatibility.GetVersion() <= 5.4:
+                paraview.print_warning(\
+                "'ArrayName' is obsolete.  Use 'SelectInputArray' property of AnnotateAttributeData instead.")
+                return proxy.GetProperty("SelectInputArray")[1]
+            else:
+                raise NotSupportedException(\
+                    "'ArrayName' is obsolete as of ParaView 5.5.  Use 'SelectInputArray' instead.")
+
+    # In 5.5, we changed the Clip to be inverted from what it was before and changed the InsideOut
+    # property to be called Invert to be clearer.
+    if pname == "InsideOut" and proxy.SMProxy.GetName() == "Clip":
+        if paraview.compatibility.GetVersion() <= 5.4:
+            return proxy.GetProperty("Invert").GetData()
+        else:
+            raise NotSupportedException(
+                    'The Clip.InsideOut property has been changed in ParaView 5.5. '\
+                    'Please set the Invert property instead.')
+
+    # In 5.6, we changed the "SpreadSheetRepresentation" proxy to no longer have
+    # the "FieldAssociation" and "GenerateCellConnectivity" properties. They are
+    # now moved to the view.
+    if pname in ["FieldAssociation", "GenerateCellConnectivity"] and proxy.SMProxy.GetXMLName() == "SpreadSheetRepresentation":
+        if paraview.compatibility.GetVersion() <= 5.5:
+            return 0
+        else:
+            raise NotSupportedException(
+                  "'%s' is obsolete on SpreadSheetRepresentation as of ParaView 5.6 and has been migrated to the view." % pname)
     raise Continue()
 
 def GetProxy(module, key):
@@ -352,4 +489,20 @@ def GetProxy(module, key):
             # note the case. The old reader didn't support `FileNames` property,
             # only `FileName`.
             return module.__dict__["plyreader"]()
+    if version < 5.5:
+        if key == "Clip":
+            # in PV 5.5 we changed the default for Clip's InsideOut property to 1 instead of 0
+            # also InsideOut was changed to Invert in 5.5
+            clip = module.__dict__[key]()
+            clip.Invert = 0
+            return clip
+    if version < 5.6:
+        if key == "Glyph":
+            # In PV 5.6, we replaced the Glyph filter with a new implementation that has a
+            # different set of properties. The previous implementation was renamed to
+            # GlyphLegacy.
+            print("Creating GlyphLegacy")
+            glyph = module.__dict__["GlyphLegacy"]()
+            print(glyph)
+            return glyph
     return module.__dict__[key]()

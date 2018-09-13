@@ -2372,18 +2372,6 @@ void pqFlatTreeView::mouseDoubleClickEvent(QMouseEvent* e)
   }
 }
 
-void pqFlatTreeView::wheelEvent(QWheelEvent* e)
-{
-  if (this->verticalScrollBar()->isVisible())
-  {
-    QApplication::sendEvent(this->verticalScrollBar(), e);
-  }
-  else
-  {
-    e->ignore();
-  }
-}
-
 // Handle proxy with "tooltip" annotation so they can display their custom
 // tooltip information instead of the default behaviour.
 bool pqFlatTreeView::event(QEvent* e)
@@ -3723,11 +3711,11 @@ void pqFlatTreeView::drawData(QPainter& painter, int px, int py, const QModelInd
       // Adjust the vertical alignment according to the style.
       if (options.displayAlignment & Qt::AlignVCenter)
       {
-        py += (itemHeight - pixmap.height()) / 2;
+        py += (itemHeight - this->IndentWidth) / 2;
       }
       else if (options.displayAlignment & Qt::AlignBottom)
       {
-        py += itemHeight - pixmap.height();
+        py += itemHeight - this->IndentWidth;
       }
 
       painter.drawPixmap(px, py, pixmap);

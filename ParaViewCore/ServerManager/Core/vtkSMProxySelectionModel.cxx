@@ -44,7 +44,7 @@ public:
   unsigned int CollaborationManagerObserverID;
   vtkSMProxySelectionModel* Owner;
   bool FollowinMaster;
-  bool Initilized;
+  bool Initialized;
   bool DisableSessionStatePush;
   std::map<int, vtkSMMessage> ClientsCachedState;
 
@@ -54,7 +54,7 @@ public:
     this->Owner = owner;
     this->CollaborationManagerObserverID = 0;
     this->FollowinMaster = true;
-    this->Initilized = false;
+    this->Initialized = false;
   }
 
   ~vtkInternal()
@@ -203,7 +203,10 @@ void vtkSMProxySelectionModel::Select(
     vtkSMProxy* proxy = iter->GetPointer();
     if (proxy && (command & vtkSMProxySelectionModel::SELECT) != 0)
     {
-      new_selection.push_back(proxy);
+      if (std::find(new_selection.begin(), new_selection.end(), proxy) == new_selection.end())
+      {
+        new_selection.push_back(proxy);
+      }
     }
     if (proxy && (command & vtkSMProxySelectionModel::DESELECT) != 0)
     {
@@ -301,7 +304,7 @@ void vtkSMProxySelectionModel::LoadState(const vtkSMMessage* msg, vtkSMProxyLoca
   // Otherwise don't try to load that state
   // If we did not get initialized yet, we don't filter
   if (this->Internal->GetMasterId() != -1 &&
-    !(!this->Internal->Initilized ||
+    !(!this->Internal->Initialized ||
         (this->IsFollowingMaster() &&
           this->Internal->GetMasterId() == static_cast<int>(msg->client_id()))))
   {
@@ -309,7 +312,7 @@ void vtkSMProxySelectionModel::LoadState(const vtkSMMessage* msg, vtkSMProxyLoca
   }
 
   // Has we are going to load a state, we can consider to be initialized
-  this->Internal->Initilized = true;
+  this->Internal->Initialized = true;
 
   // Load current proxy
   vtkSMProxy* currentProxy = NULL;
@@ -356,7 +359,10 @@ void vtkSMProxySelectionModel::LoadState(const vtkSMMessage* msg, vtkSMProxyLoca
       }
 
       // Just add the proxy in the set
-      new_selection.push_back(proxy);
+      if (std::find(new_selection.begin(), new_selection.end(), proxy) == new_selection.end())
+      {
+        new_selection.push_back(proxy);
+      }
     }
   }
 
@@ -418,7 +424,7 @@ void vtkSMProxySelectionModel::PushStateToSession()
   }
 
   // If we push our state we are correctly initialized
-  this->Internal->Initilized = true;
+  this->Internal->Initialized = true;
 
   if (!this->IsLocalPushOnly() && this->GetSession())
   {

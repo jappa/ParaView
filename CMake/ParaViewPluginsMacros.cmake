@@ -42,7 +42,7 @@
 # based on certain cmake variables). This call provides information about the
 # plugin to paraview even before trying to process it.
 # Then the CMakeLists.txt file has the pertinant code to build the plugin. The
-# CMakeLists.txt file will be processed automaticall if the plugin is enabled.
+# CMakeLists.txt file will be processed automatically if the plugin is enabled.
 # pv_plugin() macro provides options that can be used to control if the plugin
 # is enabled by default, or autoloaded or is named differently (or comprises of multiple
 # plugins -- which is rare).
@@ -157,7 +157,7 @@ mark_as_advanced(PARAVIEW_EXTRA_EXTERNAL_PLUGINS)
 # then processing the cmake files for enabled plugins.
 macro(pv_process_plugins root_src root_build)
   set(PARAVIEW_EXTERNAL_PLUGIN_DIRS "" CACHE STRING
-      "Semi-colon seperated paths to extrenal plugin directories.")
+      "Semi-colon separated paths to external plugin directories.")
   mark_as_advanced(PARAVIEW_EXTERNAL_PLUGIN_DIRS)
 
   set (PARAVIEW_PLUGINS_ALL)
@@ -286,7 +286,7 @@ function(_write_static_plugins_init_file header source)
   set(plugins_init_function "${plugins_init_function}static bool paraview_static_plugins_load(const char* name);\n\n")
   set(plugins_init_function "${plugins_init_function}static bool paraview_static_plugins_search(const char* name);\n\n")
   set(plugins_init_function "${plugins_init_function}void paraview_static_plugins_init()\n{\n")
-  set(plugins_init_function "${plugins_init_function}  vtkPVPluginLoader::SetStaticPluginLoadFunction(paraview_static_plugins_load);\n")
+  set(plugins_init_function "${plugins_init_function}  vtkPVPluginLoader::RegisterLoadPluginCallback(paraview_static_plugins_load);\n")
   set(plugins_init_function "${plugins_init_function}  vtkPVPluginTracker::SetStaticPluginSearchFunction(paraview_static_plugins_search);\n")
   set(plugins_init_function "${plugins_init_function}}\n\n")
 
@@ -310,8 +310,7 @@ function(_write_static_plugins_init_file header source)
     set(plugins_init_function "${plugins_init_function}      static bool loaded = false;\n")
     set(plugins_init_function "${plugins_init_function}      if (!loaded)\n")
     set(plugins_init_function "${plugins_init_function}        {\n")
-    set(plugins_init_function "${plugins_init_function}        PV_PLUGIN_IMPORT(${plugin_name});\n")
-    set(plugins_init_function "${plugins_init_function}        loaded = true;\n")
+    set(plugins_init_function "${plugins_init_function}        loaded = PV_PLUGIN_IMPORT(${plugin_name});\n")
     set(plugins_init_function "${plugins_init_function}        }\n")
     set(plugins_init_function "${plugins_init_function}      }\n")
     set(plugins_init_function "${plugins_init_function}    return true;\n")

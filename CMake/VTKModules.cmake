@@ -42,7 +42,7 @@ if (NOT WIN32)
 endif()
 
 set(_vtk_modules
-  # VTK modules which ParaView has a explicity compile
+  # VTK modules which ParaView has a explicitly compile
   # time dependency on
   vtkRenderingVolume
   vtkRenderingLabel
@@ -241,6 +241,10 @@ set(_vtk_modules
   # Needed for:
   #  vtkImageMandelbrotSource
 
+  vtkIOAsynchronous
+  # Needed for:
+  #  Cinema Writer
+
   vtkIOExodus
   # Needed for:
   #  vtkExodusIIReader
@@ -362,16 +366,34 @@ set(_vtk_modules
 
   vtkPVVTKExtensionsCGNSReader
   # needed for CGNS reader support.
+  
+  vtkPVVTKExtensionsCGNSWriter
+  # needed for CGNS writer support.
 
   vtkPVVTKExtensionsH5PartReader
   # needed for H5PartReader support
+
+  vtkIOVeraOut
+  # needed for vtkVeraOutReader
   )
+
+if ((NOT WIN32) OR (NOT MSVC) OR (MSVC_VERSION GREATER 1899))
+  # MSVC 2015 (1900) or newer is needed if using MVSC for vtkIOMotionFX
+  list(APPEND _vtk_modules
+    vtkIOMotionFX # needed for vtkMotionFXCFGReader
+    )
+endif()
+
 
 list(APPEND _vtk_modules vtkRenderingLICOpenGL2)
 list(APPEND _vtk_modules vtkDomainsChemistryOpenGL2)
+list (APPEND _vtk_modules vtkIOSegY)
 list(APPEND _vtk_mpi_modules vtkRenderingParallelLIC)
 if(PARAVIEW_ENABLE_PYTHON)
-  list (APPEND _vtk_modules vtkPVCinemaReader)
+  list (APPEND _vtk_modules
+    vtkPVCinemaReader
+    vtkPVPythonAlgorithm
+    )
 endif()
 
 if (PARAVIEW_ENABLE_XDMF2)
@@ -397,8 +419,8 @@ if (PARAVIEW_ENABLE_PDAL)
   list (APPEND _vtk_modules vtkIOPDAL)
 endif()
 
-
 if (PARAVIEW_USE_MPI)
+  list (APPEND _vtk_mpi_modules vtkDomainsParallelChemistry)
   list (APPEND _vtk_modules ${_vtk_mpi_modules})
 endif()
 

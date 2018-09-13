@@ -401,7 +401,7 @@ void vtkPVLODVolume::UpdateLODProperty()
     if (mapper)
     {
       // Why change the LODMapper's LUT?
-      // It has already been intialized correctly.
+      // It has already been initialized correctly.
       // This is a surface mapper.  Map the colors of the transfer function
       // to the surface.
       // mapper->SetLookupTable(this->Property->GetRGBTransferFunction());
@@ -427,7 +427,14 @@ void vtkPVLODVolume::PrintSelf(ostream& os, vtkIndent indent)
 //----------------------------------------------------------------------------
 vtkAbstractVolumeMapper* vtkPVLODVolume::GetMapper()
 {
-  return vtkAbstractVolumeMapper::SafeDownCast(this->LODProp->GetLODMapper(this->HighLODId));
+  if (this->LODProp && this->HighLODId >= 0)
+  {
+    return vtkAbstractVolumeMapper::SafeDownCast(this->LODProp->GetLODMapper(this->HighLODId));
+  }
+  else
+  {
+    return nullptr;
+  }
 }
 
 void vtkPVLODVolume::SetPropertyKeys(vtkInformation* keys)

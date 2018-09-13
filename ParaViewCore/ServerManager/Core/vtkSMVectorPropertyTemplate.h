@@ -22,16 +22,16 @@
 #define vtkSMVectorPropertyTemplate_h
 
 #include "vtkCommand.h"
+#include "vtkNumberToString.h"
+#include "vtkPVXMLElement.h"
 #include "vtkSMProperty.h"
 #include "vtkSMProxy.h"
+
 #include <algorithm>
-#include <assert.h>
-#include <limits>
+#include <cassert>
 #include <sstream>
 #include <string>
-#include <typeinfo>
 #include <vector>
-#include <vtkPVXMLElement.h>
 
 class vtkSMProperty;
 
@@ -40,7 +40,7 @@ namespace
 template <class B>
 B vtkSMVPConvertFromString(const std::string& string_representation)
 {
-  B value;
+  B value = B();
   std::istringstream buffer(string_representation);
   buffer >> value;
   return value;
@@ -109,7 +109,7 @@ public:
     this->UncheckedValues.resize(num);
     if (num == 0)
     {
-      // If num == 0, then we already have the intialized values (so to speak).
+      // If num == 0, then we already have the initialized values (so to speak).
       this->Initialized = true;
     }
     else
@@ -375,19 +375,18 @@ public:
     {
       propertyElement->AddAttribute("number_of_elements", size);
     }
+
+    // helps save full precision doubles and floats.
+    vtkNumberToString convertor;
     for (unsigned int i = 0; i < size; i++)
     {
-      std::ostringstream valueAsString;
-
-      // set the stream precision to the maximum precision for the data type
-      valueAsString.precision(std::numeric_limits<T>::digits10);
-
-      valueAsString << this->GetElement(i);
+      std::ostringstream stream;
+      stream << convertor(this->GetElement(i));
 
       vtkPVXMLElement* elementElement = vtkPVXMLElement::New();
       elementElement->SetName("Element");
       elementElement->AddAttribute("index", i);
-      elementElement->AddAttribute("value", valueAsString.str().c_str());
+      elementElement->AddAttribute("value", stream.str().c_str());
       propertyElement->AddNestedElement(elementElement);
       elementElement->Delete();
     }

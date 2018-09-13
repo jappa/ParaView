@@ -33,10 +33,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "pqCoreUtilities.h"
 #include "pqDiscreteDoubleWidget.h"
+#include "pqDoubleLineEdit.h"
 #include "pqDoubleRangeWidget.h"
 #include "pqHighlightableToolButton.h"
 #include "pqLabel.h"
-#include "pqLineEdit.h"
 #include "pqPropertiesPanel.h"
 #include "pqScalarValueListPropertyWidget.h"
 #include "pqScaleByButton.h"
@@ -44,6 +44,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqWidgetRangeDomain.h"
 #include "vtkCollection.h"
 #include "vtkCommand.h"
+#include "vtkPVGeneralSettings.h"
 #include "vtkPVXMLElement.h"
 #include "vtkSMArrayRangeDomain.h"
 #include "vtkSMBoundsDomain.h"
@@ -58,10 +59,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
+#include <QMainWindow>
 #include <QMenu>
 #include <QStyle>
 #include <QToolButton>
 
+//-----------------------------------------------------------------------------
+namespace
+{
+
+// Since the instance of "pqDoubleVectorPropertyWidget" created by
+// "pqProxyWidget::createWidgetForProperty"
+// is added to the panel layout (in "pqProxyWidgetItem::appendToLayout") only after it has been
+// instanciated,
+// we need this function to explicitly update the widget based on the Paraview settings.
+//
+// For that reason, calling "onPVGeneralSettingsModified" after creating all property widgets does
+// not have the intended effect. Indeed, the descendants of "pqCoreUtilities::mainWidget()"
+// do not include the property widget just created.
+template <typename WidgetType>
+void updatePrecisionNotationWidgetFromSettings(WidgetType* widget)
+{
+  int displayedNotation = vtkPVGeneralSettings::GetInstance()->GetRealNumberDisplayedNotation();
+  widget->setNotation(static_cast<pqDoubleLineEdit::RealNumberNotation>(displayedNotation));
+  widget->setPrecision(vtkPVGeneralSettings::GetInstance()->GetRealNumberDisplayedPrecision());
+}
+}
+
+//-----------------------------------------------------------------------------
 pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
   vtkSMProperty* smProperty, vtkSMProxy* smProxy, QWidget* parentObject)
   : pqPropertyWidget(smProxy, parentObject)
@@ -76,9 +101,9 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
   }
 
   // find the domain
-  vtkSMDoubleRangeDomain* defaultDomain = NULL;
+  vtkSMDoubleRangeDomain* defaultDomain = nullptr;
 
-  vtkSMDomain* domain = 0;
+  vtkSMDomain* domain = nullptr;
   vtkSMDomainIterator* domainIter = dvp->NewDomainIterator();
   for (domainIter->Begin(); !domainIter->IsAtEnd(); domainIter->Next())
   {
@@ -100,10 +125,40 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
 
   // Fill Layout
   vtkPVXMLElement* hints = dvp->GetHints();
-  vtkPVXMLElement* showLabels = NULL;
-  if (hints != NULL)
+  vtkPVXMLElement* showLabels = nullptr;
+  if (hints != nullptr)
   {
     showLabels = hints->FindNestedElementByName("ShowComponentLabels");
+  }
+
+  int elementCount = dvp->GetNumberOfElements();
+
+  std::vector<const char*> componentLabels(elementCount);
+  if (showLabels)
+  {
+    vtkNew<vtkCollection> elements;
+    showLabels->GetElementsByName("ComponentLabel", elements.GetPointer());
+    int nbCompLabels = elements->GetNumberOfItems();
+    if (elementCount == 0)
+    {
+      elementCount = nbCompLabels;
+      componentLabels.resize(nbCompLabels);
+    }
+    for (int i = 0; i < nbCompLabels; ++i)
+    {
+      vtkPVXMLElement* labelElement = vtkPVXMLElement::SafeDownCast(elements->GetItemAsObject(i));
+      if (labelElement)
+      {
+        int component;
+        if (labelElement->GetScalarAttribute("component", &component))
+        {
+          if (component < elementCount)
+          {
+            componentLabels[component] = labelElement->GetAttributeOrEmpty("label");
+          }
+        }
+      }
+    }
   }
 
   vtkSMDoubleRangeDomain* range = vtkSMDoubleRangeDomain::SafeDownCast(domain);
@@ -114,10 +169,15 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
     widget->setObjectName("ScalarValueList");
     widget->setRangeDomain(range);
     this->addPropertyLink(widget, "scalars", SIGNAL(scalarsChanged()), smProperty);
+    widget->setShowLabels(showLabels);
+    if (showLabels)
+    {
+      widget->setLabels(componentLabels);
+    }
 
     this->setChangeAvailableAsChangeFinished(true);
     layoutLocal->addWidget(widget);
-    this->setShowLabel(false);
+    this->setShowLabel(showLabels != nullptr);
 
     if (range)
     {
@@ -135,8 +195,8 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
   {
     if (dvp->GetNumberOfElements() == 1 &&
       ((range->GetMinimumExists(0) && range->GetMaximumExists(0)) ||
-          (dvp->FindDomain("vtkSMArrayRangeDomain") != NULL ||
-            dvp->FindDomain("vtkSMBoundsDomain") != NULL)))
+          (dvp->FindDomain("vtkSMArrayRangeDomain") != nullptr ||
+            dvp->FindDomain("vtkSMBoundsDomain") != nullptr)))
     {
       // bounded ranges are represented with a slider and a spin box
       pqDoubleRangeWidget* widget = new pqDoubleRangeWidget(this);
@@ -147,6 +207,7 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
       {
         widget->setResolution(range->GetResolution());
       }
+      updatePrecisionNotationWidgetFromSettings<pqDoubleRangeWidget>(widget);
 
       // ensures that the widget's range is updated whenever the domain changes.
       new pqWidgetRangeDomain(widget, "minimum", "maximum", dvp, 0);
@@ -164,31 +225,6 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
     else
     {
       // unbounded ranges are represented with a line edit
-      int elementCount = dvp->GetNumberOfElements();
-
-      std::vector<const char*> componentLabels;
-      componentLabels.resize(elementCount);
-
-      if (showLabels)
-      {
-        vtkNew<vtkCollection> elements;
-        showLabels->GetElementsByName("ComponentLabel", elements.GetPointer());
-        for (int i = 0; i < elements->GetNumberOfItems(); ++i)
-        {
-          vtkPVXMLElement* labelElement =
-            vtkPVXMLElement::SafeDownCast(elements->GetItemAsObject(i));
-          if (!labelElement)
-          {
-            continue;
-          }
-          int component;
-          if (labelElement->GetScalarAttribute("component", &component))
-          {
-            componentLabels[component] = labelElement->GetAttributeOrEmpty("label");
-          }
-        }
-      }
-
       if (elementCount == 6)
       {
         QGridLayout* gridLayout = new QGridLayout;
@@ -197,11 +233,9 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
 
         for (int i = 0; i < 3; i++)
         {
-          pqLineEdit* lineEdit = new pqLineEdit(this);
-          lineEdit->setValidator(new QDoubleValidator(lineEdit));
-          lineEdit->setObjectName(QString("LineEdit%1").arg(2 * i));
-          lineEdit->setTextAndResetCursor(
-            QVariant(vtkSMPropertyHelper(smProperty).GetAsDouble(2 * i)).toString());
+          pqDoubleLineEdit* lineEdit = new pqDoubleLineEdit(this);
+          lineEdit->setObjectName(QString("DoubleLineEdit%1").arg(2 * i));
+          updatePrecisionNotationWidgetFromSettings<pqDoubleLineEdit>(lineEdit);
           if (showLabels)
           {
             pqLabel* label = new pqLabel(componentLabels[2 * i], this);
@@ -213,15 +247,14 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
           {
             gridLayout->addWidget(lineEdit, i, 0);
           }
-          this->addPropertyLink(lineEdit, "text2", SIGNAL(textChanged(const QString&)), dvp, 2 * i);
-          this->connect(
-            lineEdit, SIGNAL(textChangedAndEditingFinished()), this, SIGNAL(changeFinished()));
+          this->addPropertyLink(
+            lineEdit, "fullPrecisionText", SIGNAL(textChanged(const QString&)), dvp, 2 * i);
+          this->connect(lineEdit, SIGNAL(fullPrecisionTextChangedAndEditingFinished()), this,
+            SIGNAL(changeFinished()));
 
-          lineEdit = new pqLineEdit(this);
-          lineEdit->setValidator(new QDoubleValidator(lineEdit));
-          lineEdit->setObjectName(QString("LineEdit%1").arg(2 * i + 1));
-          lineEdit->setTextAndResetCursor(
-            QVariant(vtkSMPropertyHelper(smProperty).GetAsDouble(2 * i + 1)).toString());
+          lineEdit = new pqDoubleLineEdit(this);
+          lineEdit->setObjectName(QString("DoubleLineEdit%1").arg(2 * i + 1));
+          updatePrecisionNotationWidgetFromSettings<pqDoubleLineEdit>(lineEdit);
           if (showLabels)
           {
             pqLabel* label = new pqLabel(componentLabels[2 * i + 1], this);
@@ -234,9 +267,10 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
             gridLayout->addWidget(lineEdit, i, 1);
           }
           this->addPropertyLink(
-            lineEdit, "text2", SIGNAL(textChanged(const QString&)), dvp, 2 * i + 1);
-          this->connect(
-            lineEdit, SIGNAL(textChangedAndEditingFinished()), this, SIGNAL(changeFinished()));
+            lineEdit, "fullPrecisionText", SIGNAL(textChanged(const QString&)), dvp, 2 * i + 1);
+
+          this->connect(lineEdit, SIGNAL(fullPrecisionTextChangedAndEditingFinished()), this,
+            SIGNAL(changeFinished()));
         }
 
         layoutLocal->addLayout(gridLayout);
@@ -256,15 +290,15 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
             label->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
             layoutLocal->addWidget(label);
           }
-          pqLineEdit* lineEdit = new pqLineEdit(this);
-          lineEdit->setValidator(new QDoubleValidator(lineEdit));
-          lineEdit->setObjectName(QString("LineEdit%1").arg(i));
-          lineEdit->setTextAndResetCursor(
-            QVariant(vtkSMPropertyHelper(smProperty).GetAsDouble(i)).toString());
+          pqDoubleLineEdit* lineEdit = new pqDoubleLineEdit(this);
+          lineEdit->setObjectName(QString("DoubleLineEdit%1").arg(i));
+          updatePrecisionNotationWidgetFromSettings<pqDoubleLineEdit>(lineEdit);
           layoutLocal->addWidget(lineEdit);
-          this->addPropertyLink(lineEdit, "text2", SIGNAL(textChanged(const QString&)), dvp, i);
-          this->connect(
-            lineEdit, SIGNAL(textChangedAndEditingFinished()), this, SIGNAL(changeFinished()));
+          this->addPropertyLink(
+            lineEdit, "fullPrecisionText", SIGNAL(textChanged(const QString&)), dvp, i);
+
+          this->connect(lineEdit, SIGNAL(fullPrecisionTextChangedAndEditingFinished()), this,
+            SIGNAL(changeFinished()));
         }
 
         PV_DEBUG_PANELS() << "List of QLineEdit's for an DoubleVectorProperty "
@@ -280,6 +314,7 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
     {
       pqDiscreteDoubleWidget* widget = new pqDiscreteDoubleWidget(this);
       widget->setObjectName("DiscreteDoubleWidget");
+      updatePrecisionNotationWidgetFromSettings<pqDiscreteDoubleWidget>(widget);
       widget->setValues(discrete->GetValues());
 
       this->addPropertyLink(widget, "value", SIGNAL(valueChanged(double)), smProperty);
@@ -294,12 +329,12 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
     }
     else
     {
-      vtkErrorWithObjectMacro(NULL, "vtkSMDiscreteDoubleDomain does not contain any value.");
+      qCritical("vtkSMDiscreteDoubleDomain does not contain any value.");
     }
   }
 
-  if (dvp->FindDomain("vtkSMArrayRangeDomain") != NULL ||
-    dvp->FindDomain("vtkSMBoundsDomain") != NULL)
+  if (dvp->FindDomain("vtkSMArrayRangeDomain") != nullptr ||
+    dvp->FindDomain("vtkSMBoundsDomain") != nullptr)
   {
     PV_DEBUG_PANELS() << "Adding \"Scale\" button since the domain is dynamically";
     pqScaleByButton* scaleButton = new pqScaleByButton(this);
@@ -333,6 +368,8 @@ pqDoubleVectorPropertyWidget::pqDoubleVectorPropertyWidget(
   {
     defaultDomain->Delete();
   }
+  pqCoreUtilities::connect(vtkPVGeneralSettings::GetInstance(), vtkCommand::ModifiedEvent, this,
+    SLOT(onPVGeneralSettingsModified()));
 }
 
 //-----------------------------------------------------------------------------
@@ -390,5 +427,22 @@ void pqDoubleVectorPropertyWidget::scale(double factor)
     }
     emit this->changeAvailable();
     emit this->changeFinished();
+  }
+}
+
+//-----------------------------------------------------------------------------
+void pqDoubleVectorPropertyWidget::onPVGeneralSettingsModified()
+{
+  QMainWindow* mainWindow = qobject_cast<QMainWindow*>(pqCoreUtilities::mainWidget());
+  if (mainWindow)
+  {
+    foreach (pqDoubleLineEdit* widget, mainWindow->findChildren<pqDoubleLineEdit*>())
+    {
+      if (!widget->widgetSettingsApplicationManaged())
+      {
+        continue;
+      }
+      updatePrecisionNotationWidgetFromSettings<pqDoubleLineEdit>(widget);
+    }
   }
 }

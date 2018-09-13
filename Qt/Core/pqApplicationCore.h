@@ -82,7 +82,7 @@ class PQCORE_EXPORT pqApplicationCore : public QObject
   typedef QObject Superclass;
 
 public:
-  // Get the global instace for the pqApplicationCore.
+  // Get the global instance for the pqApplicationCore.
   static pqApplicationCore* instance();
 
   /**
@@ -224,6 +224,16 @@ public:
   * Get the application settings.
   */
   pqSettings* settings();
+
+  /**
+   * Clears the settings. Since various UI components that only
+   * read settings at creation time may get out of sync, it's best
+   * to warn the user to restart the application.
+   *
+   * Any changes made to pqSettings after calling this method will be lost and
+   * will not get restored. If that's not desired, see `QSettings::clear`.
+   */
+  void clearSettings();
 
   /**
   * Save the ServerManager state.

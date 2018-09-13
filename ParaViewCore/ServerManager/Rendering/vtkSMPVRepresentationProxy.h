@@ -243,11 +243,11 @@ public:
    * Set the scalar bar visibility. This will create a new scalar bar as needed.
    * Scalar bar is only shown if scalar coloring is indeed being used.
    */
-  virtual bool SetScalarBarVisibility(vtkSMProxy* view, bool visibile);
-  static bool SetScalarBarVisibility(vtkSMProxy* proxy, vtkSMProxy* view, bool visibile)
+  virtual bool SetScalarBarVisibility(vtkSMProxy* view, bool visible);
+  static bool SetScalarBarVisibility(vtkSMProxy* proxy, vtkSMProxy* view, bool visible)
   {
     vtkSMPVRepresentationProxy* self = vtkSMPVRepresentationProxy::SafeDownCast(proxy);
-    return self ? self->SetScalarBarVisibility(view, visibile) : false;
+    return self ? self->SetScalarBarVisibility(view, visible) : false;
   }
   //@}
 
@@ -327,6 +327,12 @@ public:
    */
   bool SetRepresentationType(const char* type) VTK_OVERRIDE;
 
+  /**
+   * True if ranges have to be computed independently on component 0 for the color
+   * and 1 for the opacity on the Volume representation.
+   */
+  bool GetVolumeIndependentRanges();
+
 protected:
   vtkSMPVRepresentationProxy();
   ~vtkSMPVRepresentationProxy() override;
@@ -358,6 +364,12 @@ protected:
    * Overridden to process "RepresentationType" elements.
    */
   int ReadXMLAttributes(vtkSMSessionProxyManager* pm, vtkPVXMLElement* element) VTK_OVERRIDE;
+
+  /**
+   * In case of UseSeparateColorMap enabled, this function prefix the given
+   * arrayname with unique identifier, otherwise it acts as a passthrough.
+   */
+  std::string GetDecoratedArrayName(const std::string& arrayname);
 
   /**
    * Internal method to set scalar coloring, do not use directly.

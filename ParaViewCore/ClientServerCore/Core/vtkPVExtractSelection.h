@@ -27,7 +27,7 @@
  * type vtkSelection::CELL, then the output vtkSelection has both the cell
  * indicides as well as point indices of the cells/points that were extracted.
  * If input field type is vtkSelection::POINT, then the output vtkSelection only
- * has the indicies of the points that were extracted.
+ * has the indices of the points that were extracted.
  * This second output is useful for correlating particular
  * cells in the subset with the original data set. This is used, for instance,
  * by Chart representations to show selections.
@@ -83,6 +83,14 @@ protected:
 
   vtkSelectionNode* LocateSelection(unsigned int level, unsigned int index, vtkSelection* sel);
   vtkSelectionNode* LocateSelection(unsigned int composite_index, vtkSelection* sel);
+
+  /**
+   * Creates a new vtkSelector for the given content type.
+   * May return null if not supported. Overridden to handle
+   * vtkSelectionNode::QUERY.
+   */
+  vtkSmartPointer<vtkSelector> NewSelectionOperator(
+    vtkSelectionNode::SelectionContent type) override;
 
 private:
   vtkPVExtractSelection(const vtkPVExtractSelection&) = delete;

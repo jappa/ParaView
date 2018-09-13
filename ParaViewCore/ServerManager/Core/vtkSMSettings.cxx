@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <memory>
 #include <string>
 
 #define vtkSMSettingsDebugMacro(x)                                                                 \
@@ -62,6 +63,19 @@ public:
 bool SortByPriority(const SettingsCollection& r1, const SettingsCollection& r2)
 {
   return (r1.Priority > r2.Priority);
+}
+
+// Potentially transform JSON to handle backwards compatibility issues
+void TransformJSON(std::string& settingsJSON)
+{
+  std::string findString("TransferFuctionPresets");
+  std::string replaceString("TransferFunctionPresets");
+  size_t location = settingsJSON.find(findString);
+  while (location != std::string::npos)
+  {
+    settingsJSON.replace(location, findString.length(), replaceString);
+    location = settingsJSON.find(findString);
+  }
 }
 
 } // end anonymous namespace
@@ -963,9 +977,16 @@ bool vtkSMSettings::AddCollectionFromString(const std::string& settings, double 
     processedSettings.append("{}");
   }
 
-  // Parse the user settings
-  Json::Reader reader;
-  bool success = reader.parse(processedSettings, collection.Value, true);
+  // Take care of any backwards compatibility issues
+  TransformJSON(processedSettings);
+
+  Json::CharReaderBuilder builder;
+  builder["collectComments"] = true;
+
+  std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+
+  const char* input = processedSettings.c_str();
+  bool success = reader->parse(input, input + strlen(input), &collection.Value, nullptr);
   if (success)
   {
     this->Internal->SettingCollections.push_back(collection);

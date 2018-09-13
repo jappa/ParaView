@@ -106,6 +106,27 @@ public:
   PQ_BEHAVIOR_DEFINE_METHODS(QuickLaunchShortcuts);
   PQ_BEHAVIOR_DEFINE_METHODS(LockPanelsBehavior);
   PQ_BEHAVIOR_DEFINE_METHODS(PythonShellResetBehavior);
+  PQ_BEHAVIOR_DEFINE_METHODS(CustomShortcutBehavior);
+
+  //@{
+  /**
+   * Controls whether `pqLiveSourceBehavior` is created.
+   * @sa pqLiveSourceBehavior
+   */
+  PQ_BEHAVIOR_DEFINE_METHODS(LiveSourceBehavior);
+  //@}
+
+  //@{
+  /**
+   * By default, widgets like QComboBox, QSlider handle wheel event even when
+   * the widget doesn't have the focus. While that's handy, in many use-cases,
+   * in several where these are embedded in scrollable panels, they can
+   * interrupt the scrolling of the panel. Hence, this behavior has been added
+   * since ParaView 5.5 default. When enabled, this is enabled for QComboBox,
+   * QSlider, QAbstractSpinBox and subclasses.
+   */
+  PQ_BEHAVIOR_DEFINE_METHODS(WheelNeedsFocusBehavior);
+  //@}
 
   pqParaViewBehaviors(QMainWindow* window, QObject* parent = NULL);
   ~pqParaViewBehaviors() override;
@@ -138,6 +159,9 @@ private:
   PQ_BEHAVIOR_DECLARE_FLAG(QuickLaunchShortcuts);
   PQ_BEHAVIOR_DECLARE_FLAG(LockPanelsBehavior);
   PQ_BEHAVIOR_DECLARE_FLAG(PythonShellResetBehavior);
+  PQ_BEHAVIOR_DECLARE_FLAG(WheelNeedsFocusBehavior);
+  PQ_BEHAVIOR_DECLARE_FLAG(LiveSourceBehavior);
+  PQ_BEHAVIOR_DECLARE_FLAG(CustomShortcutBehavior);
 };
 
 #undef PQ_BEHAVIOR_DECLARE_FLAG

@@ -96,7 +96,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Do this after all above includes. On a VS2015 with Qt 5,
 // these includes cause build errors with pqRenderView etc.
 // due to some leaked through #define's (is my guess).
-#include "QVTKOpenGLWidget.h"
+#include "pqQVTKWidgetBase.h"
 #include <QSurfaceFormat>
 
 //-----------------------------------------------------------------------------
@@ -122,13 +122,6 @@ pqApplicationCore::pqApplicationCore(
 {
   vtkPVSynchronizedRenderWindows::SetUseGenericOpenGLRenderWindow(true);
 
-  // Setup the default format.
-  QSurfaceFormat fmt = QVTKOpenGLWidget::defaultFormat();
-
-  // ParaView does not support multisamples.
-  fmt.setSamples(0);
-  QSurfaceFormat::setDefaultFormat(fmt);
-
   vtkSmartPointer<pqOptions> defaultOptions;
   if (!options)
   {
@@ -140,6 +133,19 @@ pqApplicationCore::pqApplicationCore(
   vtkInitializationHelper::SetOrganizationName(QApplication::organizationName().toStdString());
   vtkInitializationHelper::SetApplicationName(QApplication::applicationName().toStdString());
   vtkInitializationHelper::Initialize(argc, argv, vtkProcessModule::PROCESS_CLIENT, options);
+
+  // Setup the default format.
+  QSurfaceFormat fmt = pqQVTKWidgetBase::defaultFormat();
+
+  // Request quad-buffered stereo format only for Crystal Eyes
+  std::string stereoType = options->GetStereoType();
+  fmt.setStereo(stereoType == "Crystal Eyes");
+
+  // ParaView does not support multisamples.
+  fmt.setSamples(0);
+
+  QSurfaceFormat::setDefaultFormat(fmt);
+
   this->constructor();
 }
 
@@ -522,20 +528,25 @@ pqSettings* pqApplicationCore::settings()
 {
   if (!this->Settings)
   {
-    pqOptions* options =
-      pqOptions::SafeDownCast(vtkProcessModule::GetProcessModule()->GetOptions());
-    if (options && options->GetDisableRegistry())
+    auto options = pqOptions::SafeDownCast(vtkProcessModule::GetProcessModule()->GetOptions());
+    bool disable_settings = (options && options->GetDisableRegistry());
+
+    const QString settingsOrg = QApplication::organizationName();
+    const QString settingsApp =
+      QApplication::applicationName() + QApplication::applicationVersion();
+
+    // for the app name, we use a "-dr" suffix is disable_settings is true.
+    const QString suffix(disable_settings ? "-dr" : "");
+
+    auto settings = new pqSettings(
+      QSettings::IniFormat, QSettings::UserScope, settingsOrg, settingsApp + suffix, this);
+    if (disable_settings || settings->value("pqApplicationCore.DisableSettings", false).toBool())
     {
-      QTemporaryFile tFile;
-      tFile.open();
-      this->Settings = new pqSettings(tFile.fileName() + ".ini", true, this);
-      this->Settings->clear();
+      settings->clear();
     }
-    else
-    {
-      this->Settings = new pqSettings(QApplication::organizationName(),
-        QApplication::applicationName() + QApplication::applicationVersion(), this);
-    }
+    // now settings are ready!
+
+    this->Settings = settings;
 
     vtkProcessModuleAutoMPI::SetEnableAutoMPI(
       this->Settings->value("GeneralSettings.EnableAutoMPI").toBool());
@@ -543,6 +554,16 @@ pqSettings* pqApplicationCore::settings()
       this->Settings->value("GeneralSettings.AutoMPILimit").toInt());
   }
   return this->Settings;
+}
+
+//-----------------------------------------------------------------------------
+void pqApplicationCore::clearSettings()
+{
+  auto settings = this->settings();
+  settings->clear();
+
+  // this will ensure that the settings won't get restored.
+  settings->setValue("pqApplicationCore.DisableSettings", true);
 }
 
 //-----------------------------------------------------------------------------

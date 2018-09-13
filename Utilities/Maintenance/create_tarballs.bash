@@ -28,26 +28,23 @@ usage () {
         "[--verbose] [-v <version>] [<tag>|<commit>]"
 }
 
-# Check for a tool to get MD5 sums from.
-if type -p md5sum >/dev/null; then
-    readonly md5tool="md5sum"
-    readonly md5regex="s/ .*//"
-elif type -p md5 >/dev/null; then
-    readonly md5tool="md5"
-    readonly md5regex="s/.*= //"
+# Check for a tool to get SHA512 sums from.
+if type -p sha512sum >/dev/null; then
+    readonly sha512tool="sha512sum"
+    readonly sha512regex="s/ .*//"
 elif type -p cmake >/dev/null; then
-    readonly md5tool="cmake -E md5sum"
-    readonly md5regex="s/ .*//"
+    readonly sha512tool="cmake -E sha512sum"
+    readonly sha512regex="s/ .*//"
 else
-    die "No 'md5sum' or 'md5' tool found."
+    die "No 'sha512sum' tool found."
 fi
 
-compute_MD5 () {
+compute_SHA512 () {
     local file="$1"
     readonly file
     shift
 
-    $md5tool "$file" | sed -e "$md5regex"
+    $sha512tool "$file" | sed -e "$sha512regex"
 }
 
 validate () {
@@ -108,14 +105,14 @@ find_data_objects () {
     readonly revision
     shift
 
-    # Find all .md5 files in the tree.
+    # Find all .sha512 files in the tree.
     git ls-tree --full-tree -r "$revision" | \
-        grep '\.md5$' | \
+        grep '\.sha512$' | \
         while read mode type obj path; do
             case "$path" in
-                *.md5)
+                *.sha512)
                     # Build the path to the object.
-                    echo "MD5/$( git cat-file blob $obj )"
+                    echo "SHA512,$( git cat-file blob $obj ),$path"
                     ;;
                 *)
                     die "unknown ExternalData content link: $path"
@@ -134,8 +131,12 @@ index_data_objects () {
     local path
     local file
     local obj
+    local realpath
+    local userealpath="$1"
+    readonly userealpath
+    shift
 
-    while IFS=/ read algo hash; do
+    while IFS=, read algo hash realpath; do
         # Final path in the source tarball.
         path=".ExternalData/$algo/$hash"
 
@@ -148,17 +149,30 @@ index_data_objects () {
         # Validate the file (catches 404 pages and the like).
         validate "$algo" "$file" "$hash"
         obj="$( git hash-object -t blob -w "$file" )"
-        echo "100644 blob $obj	$path"
+        case "$userealpath" in
+          "1")
+            echo "100644 blob $obj	$realpath"
+            ;;
+          *)
+            echo "100644 blob $obj	$path"
+            ;;
+        esac
     done | \
         git update-index --index-info
 
     check_pipeline
 }
 
-# Puts data objects into an index file.
+# Puts test-data objects into an index file.
+load_testdata_objects () {
+    find_data_objects "$@" | \
+        index_data_objects "0"
+}
+
+# Puts paraview-data objects into an index file.
 load_data_objects () {
     find_data_objects "$@" | \
-        index_data_objects
+        index_data_objects "1"
 }
 
 # Loads existing data files into an index file.
@@ -355,7 +369,19 @@ for format in $formats; do
         result=1
 done
 
-info "Loading data for $commit..."
+info "Loading testing data for $commit..."
+rm -f "$GIT_INDEX_FILE"
+load_testdata_objects "$commit"
+load_data_files "$commit"
+tree="$( git write-tree )"
+
+info "Generating testing data archive(s)..."
+for format in $formats; do
+    git_archive "$format" "$tree" "ParaViewTestingData-$version" "ParaView-$version" || \
+        result=1
+done
+
+info "Loading data tree from $commit..."
 rm -f "$GIT_INDEX_FILE"
 load_data_objects "$commit"
 load_data_files "$commit"

@@ -122,6 +122,7 @@ class vtkEventForwarderCommand;
 class vtkPVXMLElement;
 class vtkSMCompoundSourceProxy;
 class vtkSMDocumentation;
+class vtkSMExportProxyDepot;
 class vtkSMLink;
 class vtkSMProperty;
 class vtkSMProxy;
@@ -302,7 +303,7 @@ public:
   /**
    * Calls UpdateVTKObjects() on all managed proxies.
    * If modified_only flag is set, then UpdateVTKObjects will be called
-   * only those proxies that have any properties that were modifed i.e.
+   * only those proxies that have any properties that were modified i.e.
    * not pushed to the VTK objects.
    */
   void UpdateRegisteredProxies(const char* groupname, int modified_only = 1);
@@ -430,7 +431,7 @@ public:
   /**
    * Saves the state of the server manager as XML, and returns the
    * vtkPVXMLElement for the root of the state.
-   * Note this this method allocates a new vtkPVXMLElement object,
+   * Note this method allocates a new vtkPVXMLElement object,
    * it's the caller's responsibility to free it by calling Delete().
    */
   vtkPVXMLElement* SaveXMLState();
@@ -558,7 +559,7 @@ public:
    * This method returns the full object state that can be used to create that
    * object from scratch.
    * This method will be used to fill the undo stack.
-   * If not overriden this will return NULL.
+   * If not overridden this will return NULL.
    */
   virtual const vtkSMMessage* GetFullState();
 
@@ -572,6 +573,11 @@ public:
    * particular group (reggroup). Returns the first proxy found, if any.
    */
   vtkSMProxy* FindProxy(const char* reggroup, const char* xmlgroup, const char* xmltype);
+
+  /**
+   * Get access the the export depot.
+   */
+  vtkGetObjectMacro(ExportDepot, vtkSMExportProxyDepot);
 
 protected:
   vtkSMSessionProxyManager(vtkSMSession*);
@@ -637,6 +643,8 @@ private:
   vtkSMSessionProxyManagerInternals* Internals;
   vtkSMProxyManagerObserver* Observer;
   bool InLoadXMLState;
+
+  vtkSMExportProxyDepot* ExportDepot;
 
 #ifndef __WRAP__
   static vtkSMSessionProxyManager* New() { return NULL; }

@@ -38,6 +38,8 @@ class QMenu;
 class QWidget;
 class QMainWindow;
 
+class pqPropertiesPanel;
+
 /**
 * pqParaViewMenuBuilders provides helper methods to build menus that are
 * exactly as used by ParaView client. Simply call the appropriate method with
@@ -55,7 +57,7 @@ public:
   /**
   * Builds the standard Edit menu.
   */
-  static void buildEditMenu(QMenu& menu);
+  static void buildEditMenu(QMenu& menu, pqPropertiesPanel* propertiesPanel = nullptr);
 
   /**
   * Builds "Sources" menu.
@@ -68,8 +70,12 @@ public:
   * Builds "Filters" menu.
   * If you want to automatically add toolbars for filters as requested in the
   * configuration pass in a non-null main window.
+  * If you do not want to add the actions from the filters menu to quick launch
+  * maintained by pqApplicationCore (see pqPVApplicationCore::registerForQuicklaunch),
+  * then pass quickLaunchable == false.
   */
-  static void buildFiltersMenu(QMenu& menu, QMainWindow* mainWindow = 0, bool hideDisabled = false);
+  static void buildFiltersMenu(QMenu& menu, QMainWindow* mainWindow = 0, bool hideDisabled = false,
+    bool quickLaunchable = true);
 
   /**
   * Builds the "Tools" menu.
@@ -79,7 +85,7 @@ public:
   /**
   * Builds the "Catalyst" menu
   */
-  static void buildCatalystMenu(QMenu& menu);
+  static void buildCatalystMenu(QMenu& menu, QWidget* confpanel);
 
   /**
   * Builds the "View" menu.

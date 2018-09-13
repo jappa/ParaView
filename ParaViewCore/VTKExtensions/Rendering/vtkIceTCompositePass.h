@@ -244,7 +244,6 @@ public:
   /**
    * Internal callback. Don't use.
    */
-  virtual void GLDraw(const vtkRenderState*);
   virtual void Draw(const vtkRenderState*, const IceTDouble* proj_matrix,
     const IceTDouble* mv_matrix, const IceTFloat* background_color, const IceTInt* viewport,
     IceTImage result);
@@ -263,12 +262,11 @@ protected:
   //@}
 
   /**
-   * Create program for texture mapping.
+   * Create program (if needed) and prepare it for texture mapping.
    * \pre context_exists: context!=0
-   * \pre Program_void: this->Program==0
    * \post Program_exists: this->Program!=0
    */
-  void CreateProgram(vtkOpenGLRenderWindow* context);
+  void ReadyProgram(vtkOpenGLRenderWindow* context);
 
   /**
    * Updates the IceT tile information during each render.

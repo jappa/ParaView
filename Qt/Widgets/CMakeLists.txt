@@ -66,6 +66,12 @@ set(Module_SRCS
   pqDelimitedTextParser.h
   pqDiscreteDoubleWidget.cxx
   pqDiscreteDoubleWidget.h
+  pqDoubleLineEdit.cxx
+  pqDoubleLineEdit.h
+  pqDoubleLineEditEventPlayer.cxx
+  pqDoubleLineEditEventPlayer.h
+  pqDoubleLineEditEventTranslator.cxx
+  pqDoubleLineEditEventTranslator.h
   pqDoubleRangeDialog.cxx
   pqDoubleRangeDialog.h
   pqDoubleRangeWidget.cxx
@@ -80,6 +86,8 @@ set(Module_SRCS
   pqExpanderButton.h
   pqFlatTreeView.cxx
   pqFlatTreeView.h
+  pqHeaderView.cxx
+  pqHeaderView.h
   pqHighlightablePushButton.cxx
   pqHighlightablePushButton.h
   pqHighlightableToolButton.cxx
@@ -130,8 +138,6 @@ set(Module_SRCS
   pqTreeWidgetSelectionHelper.h
   pqWaitCursor.cxx
   pqWaitCursor.h
-#  QtWidgetsPlugin.cxx
-#  QtWidgetsPlugin.h
 )
 
 ##########################################################################
@@ -156,6 +162,9 @@ set (QtWidgets_SRCS
   pqConsoleWidget.h
   pqDelimitedTextParser.h
   pqDiscreteDoubleWidget.h
+  pqDoubleLineEdit.h
+  pqDoubleLineEditEventPlayer.h
+  pqDoubleLineEditEventTranslator.h
   pqDoubleRangeDialog.h
   pqDoubleRangeWidget.h
   pqDoubleSliderWidget.h
@@ -163,6 +172,7 @@ set (QtWidgets_SRCS
   pqExpandableTableView.h
   pqExpanderButton.h
   pqFlatTreeView.h
+  pqHeaderView.h
   pqHighlightablePushButton.h
   pqHighlightableToolButton.h
   pqLineEditEventPlayer.h
@@ -200,6 +210,10 @@ if (PARAVIEW_USE_QTHELP)
   set(${vtk-module}_EXPORT_CODE
     "#ifndef PARAVIEW_USE_QTHELP\n#  define PARAVIEW_USE_QTHELP\n#endif\n")
   list(APPEND qt5_private_comps Help)
+endif()
+
+if(PARAVIEW_USE_QTWEBENGINE)
+  list(APPEND qt5_public_comps WebEngineWidgets)
 endif()
 
 pv_find_package_qt(qt_public_targets REQUIRED
@@ -250,39 +264,12 @@ SET(QT_WIDGETS_ALL_SRCS ${Module_SRCS} ${QtWidgets_MOC_SOURCES}
 ##########################################################################
 # import Qt build settings
 set(${vtk-module}_NO_HeaderTest 1)
-if(PARAVIEW_USE_QTWEBKIT)
-  add_definitions(-DPARAVIEW_USE_QTWEBKIT)
-endif()
 
 vtk_module_export_code_find_package(Qt5 COMPONENTS ${qt5_public_comps})
 vtk_module_library(${vtk-module} ${QT_WIDGETS_ALL_SRCS})
 target_link_libraries(${vtk-module}
   LINK_PRIVATE ${qt_private_targets}
   LINK_PUBLIC ${qt_public_targets})
-#IF (NOT PV_INSTALL_NO_DEVELOPMENT)
-#  # Headers
-#  GLOB_INSTALL_DEVELOPMENT(
-#      ${CMAKE_CURRENT_SOURCE_DIR}
-#      ${PV_INSTALL_INCLUDE_DIR} 
-#      "*.h;*.hxx;*.txx")
-#  INSTALL(
-#      FILES ${dynamicHeaders}
-#      DESTINATION ${PV_INSTALL_INCLUDE_DIR}
-#      COMPONENT Development)
-#  # QT resources
-#  SET(resPath "${CMAKE_CURRENT_SOURCE_DIR}/Resources/UI")
-#  GLOB_INSTALL_DEVELOPMENT(
-#    "${CMAKE_CURRENT_SOURCE_DIR}"
-#    "${PV_INSTALL_INCLUDE_DIR}/Qt/Widgets/Resources/UI"
-#    "${resPath}/*.ui")
-#  SET(resPath "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icons")
-#  GLOB_INSTALL_DEVELOPMENT(
-#    "${CMAKE_CURRENT_SOURCE_DIR}"
-#    "${PV_INSTALL_INCLUDE_DIR}/Qt/Widgets/Resources/Icons"
-#    "${resPath}/*.ico;${resPath}/*.png;${resPath}/*.svg;${resPath}/*.xpm;${resPath}/*.rc")
-#  SET(resPath "${CMAKE_CURRENT_SOURCE_DIR}/Resources")
-#  GLOB_INSTALL_DEVELOPMENT(
-#    "${CMAKE_CURRENT_SOURCE_DIR}"
-#    "${PV_INSTALL_INCLUDE_DIR}/Qt/Widgets/Resources"
-#    "${resPath}/*.ui;${resPath}/*.ico;${resPath}/*.png;${resPath}/*.svg;${resPath}/*.xpm;${resPath}/*.rc;${resPath}/*.qrc")
-#ENDIF ()
+if(PARAVIEW_USE_QTWEBENGINE)
+  target_compile_definitions(${vtk-module} PRIVATE PARAVIEW_USE_QTWEBENGINE)
+endif()

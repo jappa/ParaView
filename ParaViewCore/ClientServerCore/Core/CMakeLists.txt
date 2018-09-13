@@ -49,7 +49,6 @@ set (Module_SRCS
   vtkPVDisableStackTraceSignalHandler.cxx
   vtkPVEnableStackTraceSignalHandler.cxx
   vtkPVExtractSelection.cxx
-  vtkPVExtractArraysOverTime.cxx
   vtkPVFileInformationHelper.cxx
   vtkPVGenericAttributeInformation.cxx
   vtkPVInformation.cxx
@@ -109,6 +108,7 @@ if (PARAVIEW_ENABLE_PYTHON)
     vtkPythonExtractSelection.cxx
     vtkPythonProgrammableFilter.cxx
     vtkPythonAnnotationFilter.cxx
+    vtkPythonSelector.cxx
     )
 endif()
 
