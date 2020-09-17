@@ -32,6 +32,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqHelpWindow.h"
 #include "ui_pqHelpWindow.h"
 
+#include <cassert>
+
 #include <QDebug>
 #include <QDesktopServices>
 #include <QHelpContentWidget>
@@ -88,7 +90,7 @@ pqHelpWindow::pqHelpWindow(QHelpEngine* engine, QWidget* parentObject, Qt::Windo
   , HelpEngine(engine)
   , Browser(new PQBROWSER_TYPE(this->HelpEngine, this))
 {
-  Q_ASSERT(engine != NULL);
+  assert(engine != NULL);
 
   Ui::pqHelpWindow ui;
   ui.setupUi(this);
@@ -146,7 +148,7 @@ void pqHelpWindow::showPage(const QUrl& url)
 //-----------------------------------------------------------------------------
 void pqHelpWindow::search()
 {
-  QList<QHelpSearchQuery> query = this->HelpEngine->searchEngine()->queryWidget()->query();
+  QString query = this->HelpEngine->searchEngine()->queryWidget()->searchInput();
   this->HelpEngine->searchEngine()->search(query);
 }
 

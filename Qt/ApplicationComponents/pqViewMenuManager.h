@@ -53,7 +53,7 @@ class PQAPPLICATIONCOMPONENTS_EXPORT pqViewMenuManager : public QObject
 public:
   pqViewMenuManager(QMainWindow* mainWindow, QMenu* menu);
 
-protected slots:
+protected Q_SLOTS:
   /**
    * build the menu from scratch. Clears all existing items in the menu before
    * building it.
@@ -74,6 +74,7 @@ protected:
   QPointer<QMenu> Menu;
   QPointer<QMenu> ToolbarsMenu;
   QPointer<QAction> DockPanelSeparators[2];
+  QPointer<QAction> ShowFrameDecorationsAction;
 
 private:
   Q_DISABLE_COPY(pqViewMenuManager)

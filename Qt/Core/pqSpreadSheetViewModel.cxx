@@ -32,6 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqSpreadSheetViewModel.h"
 
 #include "vtkArrayDispatch.h"
+#include "vtkCSVExporter.h"
 #include "vtkCellType.h"
 #include "vtkDataArrayAccessor.h"
 #include "vtkEventQtSlotConnect.h"
@@ -54,7 +55,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSelectionNode.h"
 #include "vtkSmartPointer.h"
 #include "vtkSpreadSheetView.h"
-#include "vtkStdString.h"
 #include "vtkTable.h"
 #include "vtkUnsignedIntArray.h"
 #include "vtkVariant.h"
@@ -71,6 +71,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqPipelineSource.h"
 #include "pqSMAdaptor.h"
 #include "pqTimer.h"
+
+#include <cassert>
 
 static uint qHash(pqSpreadSheetViewModel::vtkIndex index)
 {
@@ -115,7 +117,7 @@ public:
 pqSpreadSheetViewModel::pqSpreadSheetViewModel(vtkSMProxy* view, QObject* parentObject)
   : Superclass(parentObject)
 {
-  Q_ASSERT(view != NULL);
+  assert(view != NULL);
   this->ViewProxy = view;
   this->Internal = new pqInternal(this);
   this->Internal->VTKView = vtkSpreadSheetView::SafeDownCast(view->GetClientSideObject());
@@ -229,8 +231,8 @@ void pqSpreadSheetViewModel::forceUpdate()
     if (rows && columns)
     {
       // we always invalidate header data, just to be on a safe side.
-      emit this->headerDataChanged(Qt::Horizontal, 0, columns - 1);
-      emit this->dataChanged(this->index(0, 0), this->index(rows - 1, columns - 1));
+      Q_EMIT this->headerDataChanged(Qt::Horizontal, 0, columns - 1);
+      Q_EMIT this->dataChanged(this->index(0, 0), this->index(rows - 1, columns - 1));
     }
   }
   // this ensures that we update the selected based on the current state.
@@ -249,7 +251,7 @@ void pqSpreadSheetViewModel::delayedUpdate()
 //-----------------------------------------------------------------------------
 void pqSpreadSheetViewModel::triggerSelectionChanged()
 {
-  emit this->selectionChanged(this->Internal->SelectionModel.selection());
+  Q_EMIT this->selectionChanged(this->Internal->SelectionModel.selection());
 }
 
 //-----------------------------------------------------------------------------
@@ -335,6 +337,18 @@ public:
   }
 };
 };
+
+//-----------------------------------------------------------------------------
+QString pqSpreadSheetViewModel::GetRowsAsString() const
+{
+  vtkSpreadSheetView* view = this->GetView();
+  vtkNew<vtkCSVExporter> exporter;
+  exporter->WriteToOutputStringOn();
+  view->Export(exporter);
+
+  return exporter->GetOutputString().c_str();
+}
+
 //-----------------------------------------------------------------------------
 QVariant pqSpreadSheetViewModel::data(const QModelIndex& idx, int role /*=Qt::DisplayRole*/) const
 {
@@ -354,8 +368,8 @@ QVariant pqSpreadSheetViewModel::data(const QModelIndex& idx, int role /*=Qt::Di
 
   if (!this->isDataValid(idx))
   {
-    // If displaying field data, check to make sure that the data is valid
-    // since its arrays can be of different lengths
+    // a cell may not have valid entry for partial arrays for field data
+    // arrays with variable lengths.
     return QVariant("");
   }
 
@@ -456,7 +470,7 @@ QVariant pqSpreadSheetViewModel::headerData(
       switch (role)
       {
         case Qt::DisplayRole:
-          return view->GetColumnLabel(section);
+          return QString(view->GetColumnLabel(section).c_str());
         case SectionInternal:
           return view->IsColumnInternal(section);
         case SectionVisible:
@@ -485,7 +499,7 @@ QSet<pqSpreadSheetViewModel::vtkIndex> pqSpreadSheetViewModel::getVTKIndices(
   QSet<vtkIndex> vtkindices;
 
   vtkSpreadSheetView* view = this->GetView();
-  Q_ASSERT(view->GetShowExtractedSelection() == 0);
+  assert(view->GetShowExtractedSelection() == 0);
 
   vtkIdType numrows = view->GetNumberOfRows();
   foreach (QModelIndex idx, indexes)
@@ -509,7 +523,7 @@ QSet<pqSpreadSheetViewModel::vtkIndex> pqSpreadSheetViewModel::getVTKIndices(
       if (cid.IsArray())
       {
         vtkUnsignedIntArray* array = vtkUnsignedIntArray::SafeDownCast(cid.ToArray());
-        Q_ASSERT(array->GetNumberOfTuples() * array->GetNumberOfComponents() == 2);
+        assert(array->GetNumberOfTuples() * array->GetNumberOfComponents() == 2);
         value.Tuple[0] = static_cast<vtkIdType>(array->GetValue(0));
         value.Tuple[1] = static_cast<vtkIdType>(array->GetValue(1));
       }
@@ -530,26 +544,14 @@ QSet<pqSpreadSheetViewModel::vtkIndex> pqSpreadSheetViewModel::getVTKIndices(
 //-----------------------------------------------------------------------------
 bool pqSpreadSheetViewModel::isDataValid(const QModelIndex& idx) const
 {
-  if (this->getFieldType() != vtkDataObject::FIELD_ASSOCIATION_NONE)
-  {
-    return true;
-  }
-
   // First make sure the index itself is valid
-  pqDataRepresentation* repr = this->activeRepresentation();
-  if (!idx.isValid() || repr == NULL)
+  if (!idx.isValid() || this->activeRepresentationProxy() == nullptr)
   {
     return false;
   }
 
-  // Ensure that the row of this index is less than the length of the
-  // data array associated with its column
-  if (idx.row() < this->Internal->VTKView->GetNumberOfRows())
-  {
-    return true;
-  }
-
-  return false;
+  vtkSpreadSheetView* view = this->GetView();
+  return view->IsDataValid(idx.row(), idx.column());
 }
 
 //-----------------------------------------------------------------------------
@@ -655,6 +657,6 @@ void pqSpreadSheetViewModel::hiddenColumnsChanged()
   const int numCols = this->columnCount();
   if (numCols > 0)
   {
-    emit this->headerDataChanged(Qt::Horizontal, 0, this->columnCount() - 1);
+    Q_EMIT this->headerDataChanged(Qt::Horizontal, 0, this->columnCount() - 1);
   }
 }

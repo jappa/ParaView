@@ -1,11 +1,7 @@
-# XXX(kitware): ParaView handles versions.
-if (FALSE)
+if (FALSE) # XXX(kitware): ParaView handles versions.
 cmake_minimum_required(VERSION 2.8)
 if(COMMAND cmake_policy)
   cmake_policy(SET CMP0003 NEW)
-  if (${CMAKE_MAJOR_VERSION} GREATER 2 OR ${CMAKE_MINOR_VERSION} GREATER 7)
-    cmake_policy(SET CMP0015 OLD)
-  endif (${CMAKE_MAJOR_VERSION} GREATER 2 OR ${CMAKE_MINOR_VERSION} GREATER 7)
 endif(COMMAND cmake_policy)
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING
@@ -16,12 +12,11 @@ endif (${CMAKE_MAJOR_VERSION} GREATER 2 OR ${CMAKE_MINOR_VERSION} GREATER 7)
 endif ()
 
 project("cgns" C)
-set(CGNS_VERSION "3.3")
+set(CGNS_VERSION "4.1")
 
-# XXX(kitware): ParaView doesn't need this.
-if (FALSE)
+if (FALSE) # XXX(kitware): ParaView doesn't need CPack here.
 # Allow for building a package
-set(CPACK_PACKAGE_VERSION "${CGNS_VERSION}-develop")
+set(CPACK_PACKAGE_VERSION "${CGNS_VERSION}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "cgns-${CGNS_VERSION}")
 set(CPACK_GENERATOR "STGZ;TGZ;ZIP")
 set(CPACK_SOURCE_GENERATOR "STGZ;TGZ;ZIP")
@@ -36,20 +31,21 @@ ADD_CUSTOM_TARGET(uninstall
 	"${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
 endif ()
 
+if (FALSE) # XXX(kitware): CMake no longer does this.
 # if this is cygwin, turn off win32 flag
 if (CYGWIN)
   set(WIN32 "NO")
 endif (CYGWIN)
+endif ()
 
 ##############
 # build mode #
 ##############
 
-# XXX(kitware): Hardcoded for ParaView.
-if (FALSE)
 # get some type sizes
 include(CheckTypeSize)
 CHECK_TYPE_SIZE(long SIZE_OF_LONG)
+if (FALSE) # XXX(kitware): Hardcoded settings.
 CHECK_TYPE_SIZE(off_t SIZE_OF_OFF_T)
 
 if ("${SIZE_OF_OFF_T}" LESS 8)
@@ -68,14 +64,11 @@ option(CGNS_ENABLE_BASE_SCOPE "Enable or disable base scoped families or connect
 option(CGNS_ENABLE_MEM_DEBUG "Enable or disable memory debugging" "OFF")
 else ()
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-  set(CGNS_ENABLE_LFS OFF)
-else ()
-  set(CGNS_ENABLE_LFS ON)
-endif ()
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(CGNS_ENABLE_64BIT ON)
+  set(CGNS_ENABLE_LFS OFF) # only needed on 32bit systems
 else ()
   set(CGNS_ENABLE_64BIT OFF)
+  set(CGNS_ENABLE_LFS ON)
 endif ()
 set(CGNS_ENABLE_LEGACY OFF)
 set(CGNS_ENABLE_SCOPING ON)
@@ -96,23 +89,23 @@ if (CGNS_ENABLE_64BIT)
 else (CGNS_ENABLE_64BIT)
   mark_as_advanced(CLEAR CGNS_ENABLE_LEGACY)
 endif (CGNS_ENABLE_64BIT)
-
+	
 if (CGNS_ENABLE_LFS)
+  include(CheckSymbolExists)
   if (WIN32)
-# Are these functions always available on windows that we 
-# don't need to check?  
-    add_definitions(-DHAVE_OPEN64 -DHAVE_LSEEK64)
+    # Windows does not have an _open64 function
+    set(HAVE_OPEN64 0)
+    check_symbol_exists(_lseeki64 "io.h" HAVE_LSEEK64)
   else (WIN32)
-    include(CheckFunctionExists)
-    CHECK_FUNCTION_EXISTS(open64 HAVE_OPEN64)
-    CHECK_FUNCTION_EXISTS(lseek64 HAVE_LSEEK64)
-    if (HAVE_OPEN64)
-      add_definitions(-DHAVE_OPEN64)
-    endif (HAVE_OPEN64)
-    if (HAVE_LSEEK64)
-      add_definitions(-DHAVE_LSEEK64)
-    endif (HAVE_LSEEK64)
+    check_symbol_exists(open64 "sys/types.h;sys/stat.h;unistd.h" HAVE_OPEN64)
+    check_symbol_exists(lseek64 "sys/types.h;unistd.h" HAVE_LSEEK64)
   endif (WIN32)
+  if (HAVE_OPEN64)
+    add_definitions(-DHAVE_OPEN64)
+  endif (HAVE_OPEN64)
+  if (HAVE_LSEEK64)
+    add_definitions(-DHAVE_LSEEK64)
+  endif (HAVE_LSEEK64)
 else (CGNS_ENABLE_LFS)
   remove_definitions(-DHAVE_OPEN64 -DHAVE_LSEEK64)
 endif (CGNS_ENABLE_LFS)
@@ -121,7 +114,7 @@ endif (CGNS_ENABLE_LFS)
 if (FALSE)
 option(CGNS_ENABLE_TESTS "Enable test programs" "OFF")
 else ()
-set(CGNS_ENABLE_TESTS "OFF")
+set(CGNS_ENABLE_TESTS OFF)
 endif ()
 if (CGNS_ENABLE_TESTS)
   enable_testing()
@@ -131,8 +124,7 @@ endif (CGNS_ENABLE_TESTS)
 # Fortran #
 ###########
 
-# XXX(kitware): Hardcoded for ParaView.
-if (FALSE)
+if (FALSE) # XXX(kitware): Hardcoded settings.
 # Allow fortran support to be toggled
 option(CGNS_ENABLE_FORTRAN "Enable or disable the use of Fortran" "OFF")
 if (NOT DEFINED FORTRAN_NAMING)
@@ -225,15 +217,13 @@ endif (CGNS_ENABLE_FORTRAN AND HAS_FORTRAN)
 # HDF5 #
 ########
 
-# XXX(kitware): ParaView requires CGNS with HDF5 support.
-if (FALSE)
+if (FALSE) # XXX(kitware): Hardcoded settings.
 option(CGNS_ENABLE_HDF5 "Enable or disable HDF5 interface" "OFF")
 else ()
 set(CGNS_ENABLE_HDF5 ON)
 endif ()
 
-# XXX(kitware): Adapted for ParaView.
-if (FALSE)
+if (FALSE) # XXX(kitware): Adapted for ParaView.
 if (CGNS_ENABLE_HDF5)
 
   if (CGNS_BUILD_SHARED)
@@ -330,6 +320,11 @@ if (CGNS_ENABLE_HDF5)
     mark_as_advanced(FORCE SZIP_LIBRARY)
   endif (HDF5_NEED_SZIP)
 
+  # Check if HDF5 version is 1.8 or greater
+  if (HDF5_VERSION VERSION_LESS "1.8.0")
+    message (FATAL_ERROR "HDF5 version must be greater than 1.8.0")
+  endif (HDF5_VERSION VERSION_LESS "1.8.0")
+
   set(HDF5_NEED_MPI "OFF" CACHE BOOL "Does the HDF5 library require linking to mpi? (Only true if using parallel HDF5)")
   set(MPI_INC)
   set(MPI_LIBS)
@@ -364,14 +359,20 @@ else (CGNS_ENABLE_HDF5)
   mark_as_advanced(FORCE MPI_C_COMPILER MPI_C_INCLUDE_PATH MPI_C_LIBRARIES)
   mark_as_advanced(FORCE MPI_COMPILER MPI_INCLUDE_PATH MPI_LIBRARY MPI_EXTRA_LIBRARY MPIEXEC)
 endif (CGNS_ENABLE_HDF5)
+else ()
+if (VTK_MODULE_USE_EXTERNAL_VTK_hdf5)
+  # TODO: Implement.
+  set(H5_HAVE_PARALLEL OFF)
+else ()
+  set(H5_HAVE_PARALLEL OFF)
+endif ()
 endif ()
 
 #################
 # parallel cgns #
 #################
 
-# XXX(kitware): Adapted for ParaView.
-if (FALSE)
+if (FALSE) # XXX(kitware): Adapted for ParaView.
 if (CGNS_ENABLE_HDF5 AND HDF5_NEED_MPI)
   set(CGNS_ENABLE_PARALLEL "OFF" CACHE BOOL "Enable or disable parallel interface ?")
   mark_as_advanced(CLEAR CGNS_ENABLE_PARALLEL)
@@ -391,28 +392,34 @@ endif ()
 # RPATH Management #
 ####################
 
-# XXX(kitware): ParaView handles rpaths.
-if (FALSE)
-# use, i.e. don't skip the full RPATH for the build tree
-set(CMAKE_SKIP_BUILD_RPATH  FALSE)
+if (FALSE) # XXX(kitware): ParaView handles rpaths.
+if (CGNS_BUILD_SHARED)
+  # use, i.e. don't skip the full RPATH for the build tree
+  set(CMAKE_SKIP_BUILD_RPATH  FALSE)
 
-# when building, don't use the install RPATH already
-# (but later on when installing)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+  # when building, don't use the install RPATH already
+  # (but later on when installing)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
 
-# the RPATH to be used when installing
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+  # the RPATH to be used when installing
+  set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
-# add the automatically determined parts of the RPATH
-# which point to directories outside the build tree to the install RPATH
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+  # add the automatically determined parts of the RPATH
+  # which point to directories outside the build tree to the install RPATH
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+  IF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+     set(CMAKE_MACOSX_RPATH TRUE)
+  ENDIF()
+else(CGNS_BUILD_SHARED)
+set(CMAKE_SKIP_RPATH TRUE)
+endif(CGNS_BUILD_SHARED)
 endif ()
 
 #-----------------------------------------------------------------------------
 # Dashboard and Testing Settings
 #-----------------------------------------------------------------------------
-# XXX(kitware): ParaView doesn't include the tests.
-if (FALSE)
+if (FALSE) # XXX(kitware): Hardcoded settings.
 option (CGNS_BUILD_TESTING "Build CGNS Testing" OFF)
 else ()
 set(CGNS_BUILD_TESTING OFF)
@@ -435,4 +442,3 @@ endif (CGNS_BUILD_TESTING)
 
 # Include the src directory
 add_subdirectory(src)
-

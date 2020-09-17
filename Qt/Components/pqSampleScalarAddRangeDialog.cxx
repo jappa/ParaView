@@ -29,11 +29,14 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =========================================================================*/
-
 #include "pqSampleScalarAddRangeDialog.h"
 #include "ui_pqSampleScalarAddRangeDialog.h"
 
-#include <QDoubleValidator>
+#include "pqCoreUtilities.h"
+#include "vtkObject.h"
+
+#include <QIntValidator>
+
 #include <algorithm>
 #include <cmath>
 
@@ -55,13 +58,12 @@ pqSampleScalarAddRangeDialog::pqSampleScalarAddRangeDialog(double default_from, 
   : Superclass(Parent)
   , Implementation(new pqImplementation())
 {
+  VTK_LEGACY_REPLACED_BODY(pqSampleScalarAddRangeDialog, "ParaView 5.8", pqSeriesGeneratorDialog);
+
   this->Implementation->StrictLog = false;
   this->Implementation->Ui.setupUi(this);
 
-  this->Implementation->Ui.from->setValidator(new QDoubleValidator(this->Implementation->Ui.from));
   this->setFrom(default_from);
-
-  this->Implementation->Ui.to->setValidator(new QDoubleValidator(this->Implementation->Ui.to));
   this->setTo(default_to);
 
   this->Implementation->Ui.steps->setValidator(
@@ -91,7 +93,7 @@ double pqSampleScalarAddRangeDialog::from() const
 
 void pqSampleScalarAddRangeDialog::setFrom(double value)
 {
-  this->Implementation->Ui.from->setText(QString::number(value));
+  this->Implementation->Ui.from->setText(pqCoreUtilities::number(value));
 }
 
 double pqSampleScalarAddRangeDialog::to() const
@@ -101,7 +103,7 @@ double pqSampleScalarAddRangeDialog::to() const
 
 void pqSampleScalarAddRangeDialog::setTo(double value)
 {
-  this->Implementation->Ui.to->setText(QString::number(value));
+  this->Implementation->Ui.to->setText(pqCoreUtilities::number(value));
 }
 
 unsigned long pqSampleScalarAddRangeDialog::steps() const

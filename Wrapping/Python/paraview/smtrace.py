@@ -73,6 +73,9 @@ from paraview.vtk import vtkTimeStamp
 if sys.version_info >= (3,):
     xrange = range
 
+def _get_skip_rendering():
+    return sm.vtkSMTrace.GetActiveTracer().GetSkipRenderingComponents()
+
 class TraceOutput:
   """Internal class used to collect the trace output. Everytime anything is pushed into
   this using the append API, we ensure that the trace is updated. Trace
@@ -180,6 +183,8 @@ class Trace(object):
         ProxyAccessor has been created, other returns False. This is needed to
         bring into trace proxies that were either already created when the trace
         was started or were created indirectly and hence not explicitly traced."""
+        skip_rendering = _get_skip_rendering()
+
         if isinstance(obj, sm.SourceProxy):
             # handle pipeline source/filter proxy.
             pname = obj.SMProxy.GetSessionProxyManager().GetProxyName("sources", obj.SMProxy)
@@ -195,7 +200,7 @@ class Trace(object):
                         "# find source",
                         "%s = FindSource('%s')" % (accessor, pname)])
                 return True
-        if obj.SMProxy.IsA("vtkSMViewProxy"):
+        if not skip_rendering and obj.SMProxy.IsA("vtkSMViewProxy"):
             # handle view proxy.
             pname = obj.SMProxy.GetSessionProxyManager().GetProxyName("views", obj.SMProxy)
             if pname:
@@ -216,8 +221,13 @@ class Trace(object):
                         "# uncomment following to set a specific view size",
                         "# %s" % viewSizeAccessor.get_property_trace(in_ctor=False)])
                 cls.Output.append_separated(trace.raw_data())
+                # good idea to grab the layout accessor, if any, right now. This avoids the issue
+                # described in BUG #19403.
+                layout = simple.GetLayout(view=obj)
+                if layout:
+                    cls.get_accessor(layout)
                 return True
-        if obj.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if not skip_rendering and obj.SMProxy.IsA("vtkSMRepresentationProxy"):
             # handle representations.
             if hasattr(obj, "Input"):
                 inputAccsr = cls.get_accessor(obj.Input)
@@ -232,15 +242,15 @@ class Trace(object):
                         "%s = GetDisplayProperties(%s, view=%s)" %\
                             (accessor, inputAccsr, viewAccessor)])
                     return True
-        if cls.get_registered_name(obj, "lookup_tables"):
+        if not skip_rendering and cls.get_registered_name(obj, "lookup_tables"):
             pname = cls.get_registered_name(obj, "lookup_tables")
             if cls._create_accessor_for_tf(obj, pname):
                 return True
-        if cls.get_registered_name(obj, "piecewise_functions"):
+        if not skip_rendering and cls.get_registered_name(obj, "piecewise_functions"):
             pname = cls.get_registered_name(obj, "piecewise_functions")
             if cls._create_accessor_for_tf(obj, pname):
                 return True
-        if cls.get_registered_name(obj, "scalar_bars"):
+        if not skip_rendering and cls.get_registered_name(obj, "scalar_bars"):
             # trace scalar bar.
             lutAccessor = cls.get_accessor(obj.LookupTable)
             view = simple.LocateView(obj)
@@ -258,7 +268,7 @@ class Trace(object):
             return True
         if cls.get_registered_name(obj, "animation"):
             return cls._create_accessor_for_animation_proxies(obj)
-        if cls.get_registered_name(obj, "layouts"):
+        if not skip_rendering and cls.get_registered_name(obj, "layouts"):
             view = simple.GetActiveView()
             if view and obj.GetViewLocation(view.SMProxy) != -1:
                 viewAccessor = cls.get_accessor(view)
@@ -281,7 +291,14 @@ class Trace(object):
                     "# get the time-keeper",
                     "%s = GetTimeKeeper()" % tkAccessor])
             return True
-        if obj.GetVTKClassName() == "vtkPVLight":
+        if obj.SMProxy.IsA("vtkSMSettingsProxy"):
+            pname = obj.SMProxy.GetSessionProxyManager().GetProxyName("settings", obj.SMProxy)
+            accessor = ProxyAccessor(cls.get_varname(pname), obj)
+            cls.Output.append_separated([\
+                "# find settings proxy",
+                "%s = GetSettingsProxy('%s')" % (accessor, pname)])
+            return True
+        if not skip_rendering and obj.GetVTKClassName() == "vtkPVLight":
             view = simple.GetViewForLight(obj)
             if view:
                 index = view.AdditionalLights.index(obj)
@@ -297,14 +314,28 @@ class Trace(object):
                     "# create a new light",
                     "%s = CreateLight()" % (accessor)])
             return True
-        if obj.SMProxy.IsA("vtkSMMaterialLibraryProxy"):
+        if not skip_rendering and obj.SMProxy.IsA("vtkSMMaterialLibraryProxy"):
             tkAccessor = ProxyAccessor(cls.get_varname(cls.get_registered_name(obj, "materiallibrary")), obj)
             cls.Output.append_separated([\
                     "# get the material library",
                     "%s = GetMaterialLibrary()" % tkAccessor])
             return True
-
-
+        if not skip_rendering and obj.GetVTKClassName() == "vtkTexture":
+            pname = obj.SMProxy.GetSessionProxyManager().GetProxyName("textures", obj.SMProxy)
+            if pname:
+                accessor = ProxyAccessor(cls.get_varname(pname), obj)
+                filename = obj.FileName
+                # repr() will escape the path correctly, especially backslash on Windows.
+                cls.Output.append_separated([\
+                        "# a texture",
+                                             "%s = CreateTexture(%s)" % (accessor, repr(filename))])
+            return True
+        if cls.get_registered_name(obj, "extract_generators"):
+            regName = cls.get_registered_name(obj, "extract_generators")
+            accessor = ProxyAccessor(cls.get_varname(regName), obj)
+            cls.Output.append_separated([\
+                "# get extract generator",
+                "%s = FindExtractGenerator('%s')" % (accessor, regName)])
         return False
 
     @classmethod
@@ -647,8 +678,11 @@ class PropertyTraceHelper(object):
                   return data[0]
             except IndexError:
                 return "None"
+        elif myobject.SMProperty.IsA("vtkSMStringVectorProperty"):
+            # handle multiline properties (see #18480)
+            return self.create_multiline_string(repr(myobject))
         else:
-            return str(myobject)
+            return repr(myobject)
 
     def has_proxy_list_domain(self):
         """Returns True if this property has a ProxyListDomain, else False."""
@@ -662,10 +696,34 @@ class PropertyTraceHelper(object):
         servermanager.Proxy.GetPropertyValue()."""
         return self.ProxyAccessor.get_object().GetPropertyValue(self.get_property_name())
 
+    def get_proxy(self):
+        return self.ProxyAccessor.get_object()
+
+    def create_multiline_string(self, astr):
+        """helper to convert a string representation into a multiline string"""
+        if '\\n' in astr:
+            # this happens for multiline string-vector properties.
+            # for those, we ensure that the `astr` has raw \n's rather than
+            # the escaped version. we also fix the string indicators.
+
+            # replace '\\n' with real '\n'
+            astr = astr.replace('\\n','\n')
+
+            # escape any `"""` in the script
+            astr = astr.replace('"""', '\\"\\"\\"')
+
+            # replace first and last characters with `"""`
+            astr = '"""' + astr[1:-1] + '"""'
+        return astr
+
+
 # ===================================================================================================
 # === Filters used to filter properties traced ===
 # ===================================================================================================
 class ProxyFilter(object):
+    def __init__(self, trace_all_in_ctor=False):
+        self.trace_all_in_ctor = trace_all_in_ctor
+
     def should_never_trace(self, prop, hide_gui_hidden=True):
         if prop.get_object().GetIsInternal() or prop.get_object().GetInformationOnly():
             return True
@@ -675,9 +733,20 @@ class ProxyFilter(object):
             return True
         # if a property is "linked" to settings, then skip it here too. We
         # should eventually add an option for user to save, yes, save these too.
+        # Note, however, any property that is linked with `unlink_if_modified`
+        # set to 1 should be traced if the link no longer persists -- indicating
+        # the user manually changed it (and hence broke the link).
         if prop.get_object().GetHints():
             plink = prop.get_object().GetHints().FindNestedElementByName("PropertyLink")
-            return True if plink and plink.GetAttribute("group") == "settings" else False
+            if plink and plink.GetAttribute("group") == "settings":
+                if plink.GetAttribute("unlink_if_modified") != "1":
+                    return True
+                proxy = prop.get_proxy()
+                pxm = proxy.GetSessionProxyManager()
+                settings = pxm.GetProxy("settings", plink.GetAttribute("proxy"))
+                if settings and settings.GetSourcePropertyName(proxy.SMProxy, prop.get_property_name()):
+                    # the settings link still exists, skip tracing
+                    return True
         return False
 
     def should_trace_in_create(self, prop, user_can_modify_in_create=True):
@@ -693,7 +762,8 @@ class ProxyFilter(object):
         return (trace_props_with_default_values or not prop.get_object().IsValueDefault())
 
     def should_trace_in_ctor(self, prop):
-        return False
+        return False if not self.trace_all_in_ctor else \
+                (not self.should_never_trace(prop) and self.should_trace_in_create(prop))
 
 class PipelineProxyFilter(ProxyFilter):
     def should_trace_in_create(self, prop):
@@ -721,6 +791,13 @@ class ExodusIIReaderFilter(PipelineProxyFilter):
         # I am opting to ignore those properties when tracing.
         return prop.get_property_name() in [\
             "FilePrefix", "XMLFileName", "FilePattern", "FileRange"]
+
+class ExtractSelectionFilter(PipelineProxyFilter):
+    def should_never_trace(self, prop):
+        if PipelineProxyFilter.should_never_trace(self, prop): return True
+
+        # Selections are not registered with the proxy manager, so we will not try to trace them.
+        return prop.get_property_name() in ["Selection"]
 
 class RepresentationProxyFilter(PipelineProxyFilter):
     def should_trace_in_ctor(self, prop): return False
@@ -796,6 +873,13 @@ class ScalarBarProxyFilter(ProxyFilter):
             return False
         return ProxyFilter.should_never_trace(self, prop)
 
+class ExtractGeneratorFilter(ProxyFilter):
+    def should_trace_in_ctor(self, prop): return False
+    def should_never_trace(self, prop):
+        if prop.get_property_name() in ["Trigger", "Writer"]:
+            return True
+        return super(ExtractGeneratorFilter, self).should_never_trace(prop)
+
 def SupplementalProxy(cls):
     """This function decorates a ProxyFilter. Designed to be
     used for supplemental proxies, so that we can centralize the logic
@@ -816,10 +900,21 @@ def SupplementalProxy(cls):
 # === TraceItem types ==
 # TraceItems are units of traceable actions triggered by the application using vtkSMTrace
 # ===================================================================================================
+class RenderingMixin(object):
+    @property
+    def skip_from_trace(self):
+        if _get_skip_rendering():
+            return True
+        return False
 
 class TraceItem(object):
     def __init__(self):
-        pass
+        try:
+            if self.skip_from_trace:
+                raise Untraceable("skipped")
+        except AttributeError:
+            pass
+
     def finalize(self):
         pass
 
@@ -849,9 +944,14 @@ class RegisterPipelineProxy(TraceItem):
         ctor = sm._make_name_valid(self.Proxy.GetXMLLabel())
         trace = TraceOutput()
         trace.append("# create a new '%s'" % self.Proxy.GetXMLLabel())
-        filter_type = ExodusIIReaderFilter() \
-            if isinstance(self.Proxy, sm.ExodusIIReaderProxy) else PipelineProxyFilter()
-        trace.append(accessor.trace_ctor(ctor, filter_type))
+        if isinstance(self.Proxy, sm.ExodusIIReaderProxy):
+            filter_type = ExodusIIReaderFilter()
+        elif self.Proxy.GetXMLLabel() == "Extract Selection":
+            filter_type = ExtractSelectionFilter()
+        else:
+            filter_type = PipelineProxyFilter()
+        ctor_args = "registrationName='%s'" % pname
+        trace.append(accessor.trace_ctor(ctor, filter_type, ctor_args=ctor_args))
         Trace.Output.append_separated(trace.raw_data())
         TraceItem.finalize(self)
 
@@ -880,6 +980,14 @@ class CleanupAccessor(BookkeepingItem):
             del accessor
         import gc
         gc.collect()
+
+class BlockTraceItems(NestableTraceItem):
+    """Item to block further creation of trace items, even
+    those that are `NestableTraceItem`. Simply create this and
+    no trace items will be created by `_create_trace_item_internal`
+    until this instance is cleaned up.
+    """
+    pass
 
 class PropertiesModified(NestableTraceItem):
     """Traces properties modified on a specific proxy."""
@@ -931,7 +1039,7 @@ class PropertiesModified(NestableTraceItem):
                         valaccessor.trace_properties(props_to_trace, in_ctor=False)])
         TraceItem.finalize(self)
 
-class ScalarBarInteraction(NestableTraceItem):
+class ScalarBarInteraction(RenderingMixin, NestableTraceItem):
     """Traces scalar bar interactions"""
     def __init__(self, proxy, comment=None):
         TraceItem.__init__(self)
@@ -952,7 +1060,7 @@ class ScalarBarInteraction(NestableTraceItem):
                 self.Comment,
                 self.ProxyAccessor.trace_properties(props_to_trace, in_ctor=False)])
 
-class Show(TraceItem):
+class Show(RenderingMixin, TraceItem):
     """Traces Show"""
     def __init__(self, producer, port, view, display, comment=None):
         TraceItem.__init__(self)
@@ -984,11 +1092,13 @@ class Show(TraceItem):
         else:
             output.append("# show data in view")
         if port > 0:
-            output.append("%s = Show(OutputPort(%s, %d), %s)" % \
-                (str(accessor), str(self.ProducerAccessor), port, str(self.ViewAccessor)))
+            output.append("%s = Show(OutputPort(%s, %d), %s, '%s')" % \
+                (str(accessor), str(self.ProducerAccessor), port, str(self.ViewAccessor), \
+                str(display.GetXMLName())))
         else:
-            output.append("%s = Show(%s, %s)" % \
-                (str(accessor), str(self.ProducerAccessor), str(self.ViewAccessor)))
+            output.append("%s = Show(%s, %s, '%s')" % \
+                (str(accessor), str(self.ProducerAccessor), str(self.ViewAccessor), \
+                str(display.GetXMLName())))
         Trace.Output.append_separated(output.raw_data())
 
         output = TraceOutput()
@@ -1001,7 +1111,7 @@ class Show(TraceItem):
         Trace.Output.append_separated(output.raw_data())
         TraceItem.finalize(self)
 
-class Hide(TraceItem):
+class Hide(RenderingMixin, TraceItem):
     """Traces Hide"""
     def __init__(self, producer, port, view):
         TraceItem.__init__(self)
@@ -1016,7 +1126,7 @@ class Hide(TraceItem):
           "Hide(%s, %s)" % (str(producerAccessor), str(viewAccessor)) if port == 0 else \
               "Hide(OutputPort(%s, %d), %s)" % (str(producerAccessor), port, str(viewAccessor))])
 
-class SetScalarColoring(TraceItem):
+class SetScalarColoring(RenderingMixin, TraceItem):
     """Trace vtkSMPVRepresentationProxy.SetScalarColoring"""
     def __init__(self, display, arrayname, attribute_type, component=None, separate=False, lut=None):
         TraceItem.__init__(self)
@@ -1071,7 +1181,7 @@ class SetScalarColoring(TraceItem):
         if self.Lut:
           Trace.get_accessor(self.Lut)
 
-class RegisterViewProxy(TraceItem):
+class RegisterViewProxy(RenderingMixin, TraceItem):
     """Traces creation of a new view (vtkSMParaViewPipelineController::RegisterViewProxy)."""
     def __init__(self, proxy):
         TraceItem.__init__(self)
@@ -1118,7 +1228,7 @@ class RegisterViewProxy(TraceItem):
         # we assume views don't have proxy list domains for now, and ignore tracing them.
         TraceItem.finalize(self)
 
-class RegisterLightProxy(TraceItem):
+class RegisterLightProxy(RenderingMixin, TraceItem):
     """Traces creation of a new light (vtkSMParaViewPipelineController::RegisterLightProxy)."""
     def __init__(self, proxy, view=None):
         TraceItem.__init__(self)
@@ -1142,7 +1252,7 @@ class RegisterLightProxy(TraceItem):
         Trace.Output.append_separated(trace.raw_data())
         TraceItem.finalize(self)
 
-class ExportView(TraceItem):
+class ExportView(RenderingMixin, TraceItem):
     def __init__(self, view, exporter, filename):
         TraceItem.__init__(self)
 
@@ -1156,7 +1266,7 @@ class ExportView(TraceItem):
         trace.append("# export view")
         trace.append(\
             exporterAccessor.trace_ctor("ExportView", ExporterProxyFilter(),
-              ctor_args="'%s', view=%s" % (filename, viewAccessor),
+              ctor_args="%s, view=%s" % (repr(filename), viewAccessor),
               skip_assignment=True))
         exporterAccessor.finalize() # so that it will get deleted
         del exporterAccessor
@@ -1180,14 +1290,14 @@ class SaveData(TraceItem):
         trace.append("# save data")
         trace.append(\
             writerAccessor.trace_ctor("SaveData", WriterProxyFilter(),
-              ctor_args="'%s', proxy=%s" % (filename, ctor_args_1),
+              ctor_args="%s, proxy=%s" % (repr(filename), ctor_args_1),
               skip_assignment=True))
         writerAccessor.finalize() # so that it will get deleted.
         del writerAccessor
         del writer
         Trace.Output.append_separated(trace.raw_data())
 
-class SaveScreenshotOrAnimation(TraceItem):
+class SaveScreenshotOrAnimation(RenderingMixin, TraceItem):
     def __init__(self, helper, filename, view, layout, mode_screenshot=False):
         TraceItem.__init__(self)
         assert(view != None or layout != None)
@@ -1248,16 +1358,40 @@ class LoadState(TraceItem):
         del options
         Trace.Output.append_separated(trace.raw_data())
 
-class RegisterLayoutProxy(TraceItem):
+class RegisterLayoutProxy(RenderingMixin, TraceItem):
     def __init__(self, layout):
         TraceItem.__init__(self)
         self.Layout = sm._getPyProxy(layout)
-    def finalize(self):
+    def finalize(self, filter=None):
+        if filter is None:
+            filter = lambda x: True
         pname = Trace.get_registered_name(self.Layout, "layouts")
         accessor = ProxyAccessor(Trace.get_varname(pname), self.Layout)
         Trace.Output.append_separated([\
-            "# create new layout object",
-            "%s = CreateLayout()" % accessor])
+            "# create new layout object '%s'" % pname,
+            "%s = CreateLayout(name='%s')" % (accessor, pname)])
+
+        # Let's trace out the state for the layout.
+        def _trace_layout(layout, laccessor, location):
+            sdir = layout.GetSplitDirection(location)
+            sfraction = layout.GetSplitFraction(location)
+            if sdir == layout.SMProxy.VERTICAL:
+                Trace.Output.append([\
+                    "%s.SplitVertical(%d, %f)" % (laccessor, location, sfraction)])
+                _trace_layout(layout, laccessor, layout.GetFirstChild(location))
+                _trace_layout(layout, laccessor, layout.GetSecondChild(location))
+            elif sdir == layout.SMProxy.HORIZONTAL:
+                Trace.Output.append([\
+                    "%s.SplitHorizontal(%d, %f)" % (laccessor, location, sfraction)])
+                _trace_layout(layout, laccessor, layout.GetFirstChild(location))
+                _trace_layout(layout, laccessor, layout.GetSecondChild(location))
+            elif sdir == layout.SMProxy.NONE:
+                view = layout.GetView(location)
+                if view and filter(view):
+                    vaccessor = Trace.get_accessor(view)
+                    Trace.Output.append([\
+                        "%s.AssignView(%d, %s)" % (laccessor, location, vaccessor)])
+        _trace_layout(self.Layout, accessor, 0)
         TraceItem.finalize(self)
 
 class LoadPlugin(TraceItem):
@@ -1328,6 +1462,8 @@ class SetCurrentProxy(TraceItem):
         accessor = Trace.get_accessor(proxy)
         pxm = selmodel.GetSessionProxyManager()
         if selmodel is pxm.GetSelectionModel("ActiveView"):
+            if RenderingMixin().skip_from_trace:
+                raise Untraceable("skipped")
             Trace.Output.append_separated([\
                 "# set active view",
                 "SetActiveView(%s)" % accessor])
@@ -1409,7 +1545,20 @@ class CallFunction(TraceItem):
         to_trace.append("%s(%s)" % (functionname, ", ".join(args)))
         Trace.Output.append_separated(to_trace)
 
-class SaveCameras(BookkeepingItem):
+class ChooseTexture(RenderingMixin, TraceItem):
+    """Traces changes of texture object selection. For example renderview background."""
+    def __init__(self, owner, texture, prop):
+        TraceItem.__init__(self)
+        owner = sm._getPyProxy(owner)
+        texture = sm._getPyProxy(texture)
+        ownerAccessor = Trace.get_accessor(owner)
+        textureAccessor = Trace.get_accessor(texture)
+
+        Trace.Output.append_separated([\
+                                       "# change texture",
+                                       "%s.%s = %s" % (str(ownerAccessor), prop.GetXMLName(), str(textureAccessor))])
+
+class SaveCameras(RenderingMixin, BookkeepingItem):
     """This is used to request recording of cameras in trace"""
     # This is a little hackish at this point. We'll figure something cleaner out
     # in time.
@@ -1451,6 +1600,48 @@ class SaveCameras(BookkeepingItem):
             raise Untraceable("Invalid argument type %r"% proxy)
         return trace.raw_data()
 
+class CreateExtractGenerator(TraceItem):
+    """Traces creation of extract generators"""
+    def __init__(self, xmlname, producer, generator, registrationName, comment=None):
+        super(CreateExtractGenerator, self).__init__()
+
+        producer = sm._getPyProxy(producer)
+        generator = sm._getPyProxy(generator)
+
+        self.ProducerAccessor = Trace.get_accessor(producer)
+        self.OutputPort = producer.Port
+        self.Generator = generator
+        self.XMLName = xmlname
+        self.Comment = comment
+        self.Name = registrationName
+
+    def finalize(self):
+        output = TraceOutput()
+        port = self.OutputPort
+        regName = self.Name
+        accessor = ProxyAccessor(Trace.get_varname(regName), self.Generator)
+
+        if self.Comment is not None:
+            output.append("# %s", self.Comment)
+        else:
+            output.append("# create extract generator")
+
+        if port > 0:
+            output.append(\
+                    "%s = CreateExtractGenerator('%s', OutputPort(%s, %d), registrationName='%s')" % \
+                    (str(accessor), self.XMLName, str(self.ProducerAccessor), port, regName))
+        else:
+            output.append(\
+                    "%s = CreateExtractGenerator('%s', %s, registrationName='%s')" % \
+                    (str(accessor), self.XMLName, str(self.ProducerAccessor), regName))
+
+        ctor_trace = accessor.trace_ctor(None, ExtractGeneratorFilter())
+        if ctor_trace:
+            output.append("# trace defaults for the extract generator.")
+            output.append(ctor_trace)
+        Trace.Output.append_separated(output.raw_data())
+        super(CreateExtractGenerator, self).finalize()
+
 # __ActiveTraceItems is simply used to keep track of items that are currently
 # active to avoid non-nestable trace items from being created when previous
 # items are active.
@@ -1467,7 +1658,11 @@ def _create_trace_item_internal(key, args=None, kwargs=None):
         args = args if args else []
         kwargs = kwargs if kwargs else {}
         traceitemtype = g[key]
-        if len(__ActiveTraceItems) == 0 or issubclass(traceitemtype, NestableTraceItem):
+        if len(__ActiveTraceItems) == 0 or \
+                issubclass(traceitemtype, NestableTraceItem):
+            if len(__ActiveTraceItems) > 0 and \
+                    isinstance(__ActiveTraceItems[-1](), BlockTraceItems):
+                raise Untraceable("Not tracing since `BlockTraceItems` is active.")
             instance = traceitemtype(*args, **kwargs)
             if not issubclass(traceitemtype, BookkeepingItem):
                 __ActiveTraceItems.append(weakref.ref(instance))
@@ -1484,35 +1679,48 @@ def _start_trace_internal(preamble=None):
         Trace.Output.append(preamble)
     Trace.Output.append([\
         "#### import the simple module from the paraview",
-        "from paraview.simple import *",
-        "#### disable automatic camera reset on 'Show'",
-        "paraview.simple._DisableFirstRenderCameraReset()"])
+        "from paraview.simple import *"])
+    if not _get_skip_rendering():
+        Trace.Output.append([\
+            "#### disable automatic camera reset on 'Show'",
+            "paraview.simple._DisableFirstRenderCameraReset()"])
+
     return True
 
 def _stop_trace_internal():
     """**internal** stops trace. Called by vtkSMTrace::StopTrace()."""
-    camera_trace = SaveCameras.get_trace(None)
-    if camera_trace:
-        Trace.Output.append_separated(\
-            "#### saving camera placements for all active views")
-        Trace.Output.append_separated(camera_trace)
-    Trace.Output.append_separated([\
-        "#### uncomment the following to render all views",
-        "# RenderAllViews()",
-        "# alternatively, if you want to write images, you can use SaveScreenshot(...)."
-        ])
+    if not _get_skip_rendering():
+        # ensure we trace the active view, so camera changes will be recorded.
+        Trace.get_accessor(simple.GetActiveView())
+        camera_trace = SaveCameras.get_trace(None)
+        if camera_trace:
+            Trace.Output.append_separated(\
+                "#### saving camera placements for all active views")
+            Trace.Output.append_separated(camera_trace)
+        Trace.Output.append_separated([\
+            "#### uncomment the following to render all views",
+            "# RenderAllViews()",
+            "# alternatively, if you want to write images, you can use SaveScreenshot(...)."
+            ])
     trace = str(Trace.Output)
     Trace.reset()
+
+    # essential to ensure any obsolete accessor don't linger can cause havoc
+    # when saving state following a Python trace session
+    # (paraview/paraview#18994)
+    import gc
+    gc.collect()
+    gc.collect()
     return trace
 
 #------------------------------------------------------------------------------
 # Public methods
 #------------------------------------------------------------------------------
-def start_trace():
+def start_trace(preamble=None):
     """Starting tracing. On successful start, will return a vtkSMTrace object.
     One can set tracing options on it to control how the tracing. If tracing was
     already started, calling this contine with the same trace."""
-    return sm.vtkSMTrace.StartTrace()
+    return sm.vtkSMTrace.StartTrace(preamble)
 
 def stop_trace():
     """Stops the trace and returns the generated trace output string."""

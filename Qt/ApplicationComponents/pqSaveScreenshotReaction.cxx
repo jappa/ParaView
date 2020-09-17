@@ -34,7 +34,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqActiveObjects.h"
 #include "pqApplicationCore.h"
 #include "pqCoreUtilities.h"
+#include "pqEventDispatcher.h"
 #include "pqFileDialog.h"
+#include "pqImageUtil.h"
 #include "pqProxyWidgetDialog.h"
 #include "pqServer.h"
 #include "pqSettings.h"
@@ -53,12 +55,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMViewProxy.h"
 #include "vtkSmartPointer.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QDebug>
 #include <QFileInfo>
+#include <QMainWindow>
+#include <QMimeData>
+#include <QStatusBar>
 
 //-----------------------------------------------------------------------------
-pqSaveScreenshotReaction::pqSaveScreenshotReaction(QAction* parentObject)
+pqSaveScreenshotReaction::pqSaveScreenshotReaction(QAction* parentObject, bool clipboardMode)
   : Superclass(parentObject)
+  , ClipboardMode(clipboardMode)
 {
   // load state enable state depends on whether we are connected to an active
   // server or not and whether
@@ -118,12 +126,18 @@ QString pqSaveScreenshotReaction::promptFileName(
 }
 
 //-----------------------------------------------------------------------------
-void pqSaveScreenshotReaction::saveScreenshot()
+void pqSaveScreenshotReaction::saveScreenshot(bool clipboardMode)
 {
   pqView* view = pqActiveObjects::instance().activeView();
   if (!view)
   {
     qDebug() << "Cannot save image. No active view.";
+    return;
+  }
+
+  if (clipboardMode)
+  {
+    pqSaveScreenshotReaction::copyScreenshotToClipboard(view->getSize(), false);
     return;
   }
 
@@ -165,10 +179,6 @@ void pqSaveScreenshotReaction::saveScreenshot()
 
   vtkNew<vtkSMParaViewPipelineController> controller;
   controller->PreInitializeProxy(shProxy);
-  vtkSMPropertyHelper(shProxy, "View").Set(viewProxy);
-  vtkSMPropertyHelper(shProxy, "Layout").Set(layout);
-  shProxy->UpdateDefaultsAndVisibilities(filename.toLocal8Bit().data());
-  controller->PostInitializeProxy(shProxy);
 
   if (layout)
   {
@@ -181,6 +191,8 @@ void pqSaveScreenshotReaction::saveScreenshot()
       vtkVector2i layoutSize = layout->GetSize();
       previewHelper.Set(layoutSize.GetData(), 2);
       restorePreviewMode = true;
+      // essential to give the UI a change to update after the preview change.
+      pqEventDispatcher::processEvents();
     }
     else
     {
@@ -188,6 +200,11 @@ void pqSaveScreenshotReaction::saveScreenshot()
       vtkSMPropertyHelper(shProxy, "SaveAllViews").Set(1);
     }
   }
+
+  vtkSMPropertyHelper(shProxy, "View").Set(viewProxy);
+  vtkSMPropertyHelper(shProxy, "Layout").Set(layout);
+  shProxy->UpdateDefaultsAndVisibilities(filename.toLocal8Bit().data());
+  controller->PostInitializeProxy(shProxy);
 
   pqProxyWidgetDialog dialog(shProxy, pqCoreUtilities::mainWidget());
   dialog.setObjectName("SaveScreenshotDialog");
@@ -222,19 +239,19 @@ void pqSaveScreenshotReaction::saveScreenshot()
 }
 
 //-----------------------------------------------------------------------------
-bool pqSaveScreenshotReaction::saveScreenshot(
-  const QString& filename, const QSize& size, int quality, bool all_views)
+vtkSmartPointer<vtkImageData> pqSaveScreenshotReaction::takeScreenshot(
+  const QSize& size, bool all_views)
 {
+  vtkSmartPointer<vtkImageData> image;
   pqView* view = pqActiveObjects::instance().activeView();
   if (!view)
   {
     qDebug() << "Cannot save image. No active view.";
-    return false;
+    return image;
   }
 
   vtkSMViewProxy* viewProxy = view->getViewProxy();
 
-  vtkSmartPointer<vtkImageData> image;
   const vtkVector2i isize(size.width(), size.height());
   if (all_views)
   {
@@ -245,10 +262,41 @@ bool pqSaveScreenshotReaction::saveScreenshot(
   {
     image = vtkSMSaveScreenshotProxy::CaptureImage(viewProxy, isize);
   }
+  return image;
+}
 
-  if (image)
+//-----------------------------------------------------------------------------
+bool pqSaveScreenshotReaction::saveScreenshot(
+  const QString& filename, const QSize& size, int quality, bool all_views)
+{
+  vtkSmartPointer<vtkImageData> image = takeScreenshot(size, all_views);
+  if (!image)
   {
-    return vtkSMUtilities::SaveImage(image, filename.toLocal8Bit().data(), quality) != 0;
+    return false;
   }
-  return false;
+  return vtkSMUtilities::SaveImage(image, filename.toLocal8Bit().data(), quality) != 0;
+}
+
+//-----------------------------------------------------------------------------
+bool pqSaveScreenshotReaction::copyScreenshotToClipboard(const QSize& size, bool all_views)
+{
+  vtkSmartPointer<vtkImageData> image = takeScreenshot(size, all_views);
+  if (!image)
+  {
+    return false;
+  }
+
+  QImage qimg;
+  pqImageUtil::fromImageData(image, qimg);
+  QMimeData* data = new QMimeData;
+  data->setImageData(qimg);
+  QApplication::clipboard()->setMimeData(data);
+  QMainWindow* mainWindow = qobject_cast<QMainWindow*>(pqCoreUtilities::mainWidget());
+  if (mainWindow)
+  {
+    mainWindow->statusBar()->showMessage(
+      tr("View content has been copied to the clipboard."), 2000);
+  }
+
+  return true;
 }

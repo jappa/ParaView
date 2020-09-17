@@ -35,6 +35,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSmartPointer.h"
 #include "vtkSubsetInclusionLattice.h"
 
+#include <cassert>
+
 //-----------------------------------------------------------------------------
 class pqSubsetInclusionLatticeTreeModel::pqInternals
 {
@@ -123,8 +125,8 @@ void pqSubsetInclusionLatticeTreeModel::silSelectionModified(
   const int nodeid = *(reinterpret_cast<const int*>(calldata));
   QModelIndex idx = this->indexForNode(nodeid);
   QVector<int> roles = { Qt::CheckStateRole };
-  emit this->dataChanged(idx, idx, roles);
-  emit this->selectionModified();
+  Q_EMIT this->dataChanged(idx, idx, roles);
+  Q_EMIT this->selectionModified();
 }
 
 //-----------------------------------------------------------------------------
@@ -187,7 +189,7 @@ QModelIndex pqSubsetInclusionLatticeTreeModel::parent(const QModelIndex& idx) co
   }
 
   const int parentNodeIdx = internals.SIL->GetParent(nodeIdx);
-  Q_ASSERT(parentNodeIdx >= 0);
+  assert(parentNodeIdx >= 0);
   if (parentNodeIdx == 0)
   {
     return QModelIndex();
@@ -196,7 +198,7 @@ QModelIndex pqSubsetInclusionLatticeTreeModel::parent(const QModelIndex& idx) co
   int childIndex = 0;
   const int parentsParentNodeIdx = internals.SIL->GetParent(parentNodeIdx, &childIndex);
   (void)parentsParentNodeIdx;
-  Q_ASSERT(parentsParentNodeIdx != -1);
+  assert(parentsParentNodeIdx != -1);
 
   return this->createIndex(childIndex, 0, static_cast<quintptr>(parentNodeIdx));
 }
@@ -306,5 +308,5 @@ void pqSubsetInclusionLatticeTreeModel::setSelection(const QList<QVariant>& qtSe
 
   pqInternals& internals = (*this->Internals);
   internals.SIL->SetSelection(vtkSel);
-  emit this->selectionModified();
+  Q_EMIT this->selectionModified();
 }

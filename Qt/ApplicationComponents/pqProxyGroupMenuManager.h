@@ -137,16 +137,16 @@ public:
    */
   bool supportsQuickLaunch() const { return this->SupportsQuickLaunch; }
 
-  void setEnableBookmarks(bool enable) { this->EnableBookmarks = enable; }
+  void setEnableFavorites(bool enable) { this->EnableFavorites = enable; }
 
-  QMenu* getBookmarksMenu();
+  QMenu* getFavoritesMenu();
 
   /**
    * Given a category name, return the category label.
    */
   QString categoryLabel(const QString& category);
 
-public slots:
+public Q_SLOTS:
   /**
   * Load a configuration XML. It will find the elements with resourceTagName
   * in the XML and populate the menu accordingly. Applications do not need to
@@ -181,7 +181,7 @@ public slots:
   */
   void populateMenu();
 
-signals:
+Q_SIGNALS:
   void triggered(const QString& group, const QString& name);
 
   /**
@@ -190,7 +190,7 @@ signals:
   */
   void menuPopulated();
 
-protected slots:
+protected Q_SLOTS:
   void triggered();
   void quickLaunch();
   void switchActiveServer();
@@ -203,25 +203,25 @@ protected slots:
   void populateRecentlyUsedMenu();
 
   /**
-   * called when "bookmarks" menu is being shown.
-   * create the menu (and submenu) with actions for the filters in the bookmarks list.
+   * called when "favorites" menu is being shown.
+   * create the menu (and submenu) with actions for the filters in the favorites list.
    */
-  void populateBookmarksMenu();
+  void populateFavoritesMenu();
 
 protected:
   QString ResourceTagName;
   vtkPVXMLElement* MenuRoot;
   int RecentlyUsedMenuSize;
   bool Enabled;
-  bool EnableBookmarks;
+  bool EnableFavorites;
 
   void loadRecentlyUsedItems();
   void saveRecentlyUsedItems();
 
   /**
-   * Load the bookmarks from settings.
+   * Load the favorites from settings.
    */
-  void loadBookmarksItems();
+  void loadFavoritesItems();
 
   /**
   * Returns the action for a given proxy.

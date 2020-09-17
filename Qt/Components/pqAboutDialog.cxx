@@ -35,6 +35,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "QtTestingConfigure.h"
 #include "pqApplicationCore.h"
+#include "pqCoreUtilities.h"
+#include "pqFileDialog.h"
 #include "pqOptions.h"
 #include "pqServer.h"
 #include "pqServerManagerModel.h"
@@ -49,10 +51,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMProxyManager.h"
 #include "vtkSMSession.h"
 #include "vtkSMViewProxy.h"
+#include "vtkVersion.h"
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 
 #include <QApplication>
+#include <QClipboard>
 #include <QFile>
 #include <QHeaderView>
 
@@ -85,8 +89,7 @@ pqAboutDialog::pqAboutDialog(QWidget* Parent)
   info = info.remove(0, idx);
 
   this->Ui->VersionLabel->setText(
-    QString("<html><b>Version: <i>%1</i></b></html>")
-      .arg(QString(PARAVIEW_VERSION_FULL) + " " + QString(PARAVIEW_BUILD_ARCHITECTURE) + "-bit"));
+    QString("<html><b>Version: <i>%1</i></b></html>").arg(QString(PARAVIEW_VERSION_FULL)));
 
   this->AddClientInformation();
   this->AddServerInformation();
@@ -129,15 +132,9 @@ void pqAboutDialog::AddClientInformation()
 
   QTreeWidget* tree = this->Ui->ClientInformation;
 
-  ::addItem(tree, "Version",
-    QString(PARAVIEW_VERSION_FULL) + " " + QString(PARAVIEW_BUILD_ARCHITECTURE) + "-bit");
+  ::addItem(tree, "Version", QString(PARAVIEW_VERSION_FULL));
+  ::addItem(tree, "VTK Version", QString(vtkVersion::GetVTKVersionFull()));
   ::addItem(tree, "Qt Version", QT_VERSION_STR);
-
-#if defined(PARAVIEW_BUILD_ARCHITECTURE)
-  ::addItem(tree, "Architecture", PARAVIEW_BUILD_ARCHITECTURE);
-#else
-  ::addItem(tree, "Architecture", PARAVIEW_BUILD_ARCHITECTURE);
-#endif
 
   ::addItem(tree, "vtkIdType size", QString("%1bits").arg(8 * sizeof(vtkIdType)));
 
@@ -175,7 +172,7 @@ void pqAboutDialog::AddClientInformation()
   ::addItem(tree, "Python Testing", "Off");
 #endif
 
-#if defined(PARAVIEW_USE_MPI)
+#if VTK_MODULE_ENABLE_VTK_ParallelMPI
   ::addItem(tree, "MPI Enabled", "On");
 #else
   ::addItem(tree, "MPI Enabled", "Off");
@@ -307,4 +304,59 @@ void pqAboutDialog::AddServerInformation(pqServer* server, QTreeWidget* tree)
   {
     ::addItem(tree, "Headless support", "None");
   }
+}
+
+//-----------------------------------------------------------------------------
+QString pqAboutDialog::formatToText(QTreeWidget* tree)
+{
+  QString text;
+  QTreeWidgetItemIterator it(tree);
+  while (*it)
+  {
+    text += (*it)->text(0) + ": " + (*it)->text(1) + "\n";
+    ++it;
+  }
+  return text;
+}
+
+//-----------------------------------------------------------------------------
+QString pqAboutDialog::formatToText()
+{
+  QString text = "Client Information:\n";
+  QTreeWidget* tree = this->Ui->ClientInformation;
+  text += this->formatToText(tree);
+  tree = this->Ui->ServerInformation;
+  text += "\nConnection Information:\n";
+  text += this->formatToText(tree);
+  return text;
+}
+
+//-----------------------------------------------------------------------------
+void pqAboutDialog::saveToFile()
+{
+  pqFileDialog fileDialog(nullptr, pqCoreUtilities::mainWidget(), tr("Save to File"), QString(),
+    "Text Files (*.txt);;All Files (*)");
+  fileDialog.setFileMode(pqFileDialog::AnyFile);
+  if (fileDialog.exec() != pqFileDialog::Accepted)
+  {
+    // Canceled
+    return;
+  }
+
+  QString filename = fileDialog.getSelectedFiles().first();
+  QByteArray filename_ba = filename.toLocal8Bit();
+  std::ofstream fileStream;
+  fileStream.open(filename_ba.data());
+  if (fileStream.is_open())
+  {
+    fileStream << this->formatToText().toStdString();
+    fileStream.close();
+  }
+}
+
+//-----------------------------------------------------------------------------
+void pqAboutDialog::copyToClipboard()
+{
+  QClipboard* clipboard = QGuiApplication::clipboard();
+  clipboard->setText(this->formatToText());
 }

@@ -32,12 +32,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqHandlePropertyWidget.h"
 #include "ui_pqHandlePropertyWidget.h"
 
+#include "pqOutputPort.h"
+#include "pqPVApplicationCore.h"
 #include "pqPointPickingHelper.h"
+#include "pqSelectionManager.h"
 #include "vtkSMNewWidgetRepresentationProxy.h"
 #include "vtkSMPropertyGroup.h"
 #include "vtkSMPropertyHelper.h"
-
-#include <QDoubleValidator>
 
 //-----------------------------------------------------------------------------
 pqHandlePropertyWidget::pqHandlePropertyWidget(
@@ -46,10 +47,6 @@ pqHandlePropertyWidget::pqHandlePropertyWidget(
 {
   Ui::HandlePropertyWidget ui;
   ui.setupUi(this);
-
-  new QDoubleValidator(ui.worldPositionX);
-  new QDoubleValidator(ui.worldPositionY);
-  new QDoubleValidator(ui.worldPositionZ);
 
   if (vtkSMProperty* worldPosition = smgroup->GetProperty("WorldPosition"))
   {
@@ -78,6 +75,21 @@ pqHandlePropertyWidget::pqHandlePropertyWidget(
     ui.useCenterBounds->hide();
   }
 
+  this->UseSelectionCenterButton = ui.useSelectionCenter;
+  this->connect(pqPVApplicationCore::instance()->selectionManager(),
+    SIGNAL(selectionChanged(pqOutputPort*)), SLOT(selectionChanged()));
+  this->selectionChanged();
+  QObject::connect(ui.useSelectionCenter, &QPushButton::clicked, [this]() {
+    auto selMgr = pqPVApplicationCore::instance()->selectionManager();
+    auto bbox = selMgr->selectedDataBounds();
+    if (bbox.IsValid())
+    {
+      double center[3];
+      bbox.GetCenter(center);
+      this->setWorldPosition(center[0], center[1], center[2]);
+    }
+  });
+
   // link show3DWidget checkbox
   this->connect(ui.show3DWidget, SIGNAL(toggled(bool)), SLOT(setWidgetVisible(bool)));
   ui.show3DWidget->connect(this, SIGNAL(widgetVisibilityToggled(bool)), SLOT(setChecked(bool)));
@@ -103,6 +115,16 @@ pqHandlePropertyWidget::~pqHandlePropertyWidget()
 }
 
 //-----------------------------------------------------------------------------
+void pqHandlePropertyWidget::selectionChanged()
+{
+  if (this->UseSelectionCenterButton)
+  {
+    auto selMgr = pqPVApplicationCore::instance()->selectionManager();
+    this->UseSelectionCenterButton->setEnabled(selMgr->hasActiveSelection());
+  }
+}
+
+//-----------------------------------------------------------------------------
 void pqHandlePropertyWidget::placeWidget()
 {
   // nothing to do.
@@ -115,7 +137,7 @@ void pqHandlePropertyWidget::setWorldPosition(double wx, double wy, double wz)
   double o[3] = { wx, wy, wz };
   vtkSMPropertyHelper(wdgProxy, "WorldPosition").Set(o, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }
 

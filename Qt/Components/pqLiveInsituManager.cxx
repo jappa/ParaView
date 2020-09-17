@@ -57,6 +57,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMSessionProxyManager.h"
 #include "vtkSMSourceProxy.h"
 
+#include <cassert>
+
 //#define pqLiveInsituManagerDebugMacro(x) std::cerr << x << endl;
 #define pqLiveInsituManagerDebugMacro(x)
 
@@ -152,7 +154,7 @@ bool pqLiveInsituManager::isWriterParametersProxy(vtkSMProxy* proxy)
 }
 
 //-----------------------------------------------------------------------------
-bool pqLiveInsituManager::isInsitu(pqPipelineSource* pipelineSource)
+bool pqLiveInsituManager::isInsitu(pqProxy* pipelineSource)
 {
   pqServer* insituSession = pqLiveInsituManager::instance()->selectedInsituServer();
   if (!insituSession)
@@ -249,7 +251,7 @@ pqLiveInsituVisualizationManager* pqLiveInsituManager::connect(pqServer* server,
       QMessageBox::Ok, pqCoreUtilities::mainWidget());
     mBox->open();
     QObject::connect(mgr, SIGNAL(insituConnected()), mBox, SLOT(close()));
-    emit connectionInitiated(server);
+    Q_EMIT connectionInitiated(server);
     return mgr;
   }
   else
@@ -332,7 +334,7 @@ void pqLiveInsituManager::time(pqPipelineSource* pipelineSource, double* time, v
       vtkSMSession* session = pipelineSource->getSourceProxy()->GetSession();
       pqServer* insituSession = model->findServer(session);
       vtkSMLiveInsituLinkProxy* linkProxy = pqLiveInsituManager::linkProxy(insituSession);
-      Q_ASSERT(linkProxy);
+      assert(linkProxy);
       *timeStep = linkProxy->GetTimeStep();
     }
   }
@@ -377,7 +379,7 @@ bool pqLiveInsituManager::isTimeStepBreakpointHit() const
 void pqLiveInsituManager::onDataUpdated(pqPipelineSource* source)
 {
   pqLiveInsituManager::time(source, &this->Time, &this->TimeStep);
-  emit timeUpdated();
+  Q_EMIT timeUpdated();
   if (isTimeBreakpointHit() || isTimeStepBreakpointHit())
   {
     pqServerManagerModel* model = pqApplicationCore::instance()->getServerManagerModel();
@@ -388,7 +390,7 @@ void pqLiveInsituManager::onDataUpdated(pqPipelineSource* source)
     // changed we try to send to the server an updated property. This does not
     // work unless we send this update through the message queue (we wait
     // for LoadState to finish).
-    emit breakpointHit(insituSession);
+    Q_EMIT breakpointHit(insituSession);
   }
 }
 
@@ -414,7 +416,7 @@ void pqLiveInsituManager::setBreakpoint(double t)
     {
       this->BreakpointTime = t;
       this->BreakpointTimeStep = INVALID_TIME_STEP;
-      emit breakpointAdded(insituSession);
+      Q_EMIT breakpointAdded(insituSession);
     }
   }
 }
@@ -429,7 +431,7 @@ void pqLiveInsituManager::setBreakpoint(vtkIdType _timeStep)
     {
       this->BreakpointTime = INVALID_TIME;
       this->BreakpointTimeStep = _timeStep;
-      emit breakpointAdded(insituSession);
+      Q_EMIT breakpointAdded(insituSession);
     }
   }
 }
@@ -444,7 +446,7 @@ void pqLiveInsituManager::removeBreakpoint()
     {
       this->BreakpointTime = INVALID_TIME;
       this->BreakpointTimeStep = INVALID_TIME_STEP;
-      emit breakpointRemoved(insituSession);
+      Q_EMIT breakpointRemoved(insituSession);
     }
   }
 }

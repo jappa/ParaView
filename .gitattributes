@@ -5,6 +5,7 @@
 *.sh.in          crlf=input
 pvblot.in        crlf=input
 pre-commit       crlf=input
+*.patch.in       -whitespace -text
 
 # Custom attribute to mark sources as using our C code style.
 [attr]our-c-style  whitespace=tab-in-indent,-blank-at-eol  format.clang-format
@@ -19,6 +20,8 @@ pre-commit       crlf=input
 *.glsl           whitespace=tab-in-indent,-blank-at-eol
 *.txt            whitespace=tab-in-indent,-blank-at-eol
 *.cmake          whitespace=tab-in-indent,-blank-at-eol
+
+*.sha512         eol=lf
 
 *.md             whitespace=tab-in-indent conflict-marker-size=30
 

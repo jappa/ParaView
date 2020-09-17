@@ -166,7 +166,7 @@ void pqSILModel::setStatus(const QString& hierarchyName, const QList<QVariant>& 
       this->SILModel->SetCheckState(vertex, vtkSMSILModel::UNCHECKED);
     }
   }
-  emit this->checkStatusChanged();
+  Q_EMIT this->checkStatusChanged();
 }
 
 //-----------------------------------------------------------------------------
@@ -229,12 +229,12 @@ QModelIndex pqSILModel::index(
   }
 
   // Ensure that the vertexId refers to a non-leaf node.
-  if (!this->SILDomain)
+  if (!this->SILModel)
   {
     return QModelIndex();
   }
 
-  auto sil = this->SILDomain->GetSIL();
+  auto sil = this->SILModel->GetSIL();
   if (sil && !this->isLeaf(vertexId))
   {
     if (row < sil->GetOutDegree(vertexId))
@@ -359,7 +359,7 @@ QModelIndex pqSILModel::makeIndex(vtkIdType vertexid) const
 
   int count = 0;
   vtkSmartPointer<vtkOutEdgeIterator> iter = vtkSmartPointer<vtkOutEdgeIterator>::New();
-  auto sil = this->SILDomain->GetSIL();
+  auto sil = this->SILModel->GetSIL();
   sil->GetOutEdges(parentId, iter);
   vtkDataArray* crossEdgesArray =
     vtkDataArray::SafeDownCast(sil->GetEdgeData()->GetAbstractArray("CrossEdges"));
@@ -434,7 +434,7 @@ bool pqSILModel::setData(const QModelIndex& idx, const QVariant& value, int role
     bool checked = (value.toInt() == Qt::Checked);
     this->SILModel->SetCheckState(
       vertexId, checked ? vtkSMSILModel::CHECKED : vtkSMSILModel::UNCHECKED);
-    emit this->checkStatusChanged();
+    Q_EMIT this->checkStatusChanged();
     return true;
   }
 
@@ -446,7 +446,7 @@ Qt::ItemFlags pqSILModel::flags(const QModelIndex& idx) const
 {
   if (!INDEX_IS_VALID(idx))
   {
-    return 0;
+    return Qt::ItemFlags{};
   }
 
   vtkIdType vertexId = 0;
@@ -471,5 +471,5 @@ void pqSILModel::checkStateUpdated(
 {
   vtkIdType vertexId = *reinterpret_cast<vtkIdType*>(calldata);
   QModelIndex idx = this->makeIndex(vertexId);
-  emit this->dataChanged(idx, idx);
+  Q_EMIT this->dataChanged(idx, idx, QVector<int>{ Qt::CheckStateRole });
 }

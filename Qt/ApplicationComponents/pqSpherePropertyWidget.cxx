@@ -38,8 +38,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMPropertyGroup.h"
 #include "vtkSMPropertyHelper.h"
 
-#include <QDoubleValidator>
-
 //-----------------------------------------------------------------------------
 pqSpherePropertyWidget::pqSpherePropertyWidget(
   vtkSMProxy* smproxy, vtkSMPropertyGroup* smgroup, QWidget* parentObject)
@@ -47,14 +45,6 @@ pqSpherePropertyWidget::pqSpherePropertyWidget(
 {
   Ui::SpherePropertyWidget ui;
   ui.setupUi(this);
-
-  new QDoubleValidator(ui.centerX);
-  new QDoubleValidator(ui.centerY);
-  new QDoubleValidator(ui.centerZ);
-  new QDoubleValidator(ui.normalX);
-  new QDoubleValidator(ui.normalY);
-  new QDoubleValidator(ui.normalZ);
-  new QDoubleValidator(ui.radius);
 
   if (vtkSMProperty* center = smgroup->GetProperty("Center"))
   {
@@ -154,7 +144,7 @@ void pqSpherePropertyWidget::setCenter(double x, double y, double z)
   double origin[3] = { x, y, z };
   vtkSMPropertyHelper(wdgProxy, "Center").Set(origin, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }
 
@@ -170,7 +160,7 @@ void pqSpherePropertyWidget::centerOnBounds()
     vtkSMPropertyHelper(wdgProxy, "Center").Set(origin, 3);
     vtkSMPropertyHelper(wdgProxy, "Radius").Set(bbox.GetMaxLength() / 2.0);
     wdgProxy->UpdateVTKObjects();
-    emit this->changeAvailable();
+    Q_EMIT this->changeAvailable();
     this->render();
   }
 }

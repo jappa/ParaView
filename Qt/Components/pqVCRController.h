@@ -53,7 +53,7 @@ public:
   pqVCRController(QObject* parent = 0);
   ~pqVCRController() override;
 
-signals:
+Q_SIGNALS:
   void timestepChanged();
 
   // emitted with playing(true) when play begins and
@@ -72,18 +72,7 @@ signals:
 
   void timeRanges(double, double);
 
-  /**
-  * emitted when the animation begins playing.
-  * For now, playing of animation is non-undoable.
-  */
-  void beginNonUndoableChanges();
-
-  /**
-  * emitted when the animation ends playing.
-  */
-  void endNonUndoableChanges();
-
-public slots:
+public Q_SLOTS:
   // Set the animation scene. If null, the VCR control is disabled
   // (emits enabled(false)).
   void setAnimationScene(pqAnimationScene*);
@@ -100,7 +89,7 @@ public slots:
   void onPause();
   void onLoop(bool checked);
 
-protected slots:
+protected Q_SLOTS:
   void onTick();
   void onLoopPropertyChanged();
   void onBeginPlay();

@@ -236,7 +236,7 @@ void pqCollaborationManager::onClientMessage(pqServer* server, vtkSMMessage* msg
         userId = msg->GetExtension(ChatMessage::author);
         userName = server->session()->GetCollaborationManager()->GetUserLabel(userId);
         chatMsg = msg->GetExtension(ChatMessage::txt).c_str();
-        emit triggerChatMessage(server, userId, chatMsg);
+        Q_EMIT triggerChatMessage(server, userId, chatMsg);
         break;
       case QtEvent::OTHER:
         // Custom handling
@@ -256,7 +256,7 @@ void pqCollaborationManager::onClientMessage(pqServer* server, vtkSMMessage* msg
   }
   else
   {
-    emit triggerStateClientOnlyMessage(server, msg);
+    Q_EMIT triggerStateClientOnlyMessage(server, msg);
   }
 }
 
@@ -417,18 +417,23 @@ void pqCollaborationManager::updateEnabledState()
     }
   }
 
-  emit triggeredMasterChanged(enabled);
+  Q_EMIT triggeredMasterChanged(enabled);
 }
 
 //-----------------------------------------------------------------------------
 void pqCollaborationManager::attachMouseListenerTo3DViews()
 {
-  QWidget* mainWidget = pqCoreUtilities::mainWidget();
-  foreach (pqQVTKWidget* widget, mainWidget->findChildren<pqQVTKWidget*>())
-  {
-    QObject::connect(widget, SIGNAL(mouseEvent(QMouseEvent*)), this,
-      SLOT(updateMousePointerLocation(QMouseEvent*)), Qt::UniqueConnection);
-  }
+  // I am deliberately commenting this out. Collaboration is slated for
+  // deprecation. Since we removed the unnecessary `mouseEvent`, it no longer
+  // possible to support this. Rather than add more code to support a deprecated
+  // use-case, we just drop it for now.
+
+  // QWidget* mainWidget = pqCoreUtilities::mainWidget();
+  // foreach (pqQVTKWidget* widget, mainWidget->findChildren<pqQVTKWidget*>())
+  //{
+  //  QObject::connect(widget, SIGNAL(mouseEvent(QMouseEvent*)), this,
+  //    SLOT(updateMousePointerLocation(QMouseEvent*)), Qt::UniqueConnection);
+  //}
 }
 
 //-----------------------------------------------------------------------------

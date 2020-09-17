@@ -37,6 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqComparativeRenderView.h"
 #include "pqComparativeXYBarChartView.h"
 #include "pqComparativeXYChartView.h"
+#include "pqExtractGenerator.h"
 #include "pqMultiSliceView.h"
 #include "pqParallelCoordinatesChartView.h"
 #include "pqPipelineFilter.h"
@@ -48,10 +49,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqServer.h"
 #include "pqSpreadSheetView.h"
 #include "pqTimeKeeper.h"
-#include "pqXYBagChartView.h"
 #include "pqXYBarChartView.h"
 #include "pqXYChartView.h"
-#include "pqXYFunctionalBagChartView.h"
 #include "pqXYHistogramChartView.h"
 #include "vtkPVConfig.h"
 #include "vtkSMComparativeViewProxy.h"
@@ -61,8 +60,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMRenderViewProxy.h"
 #include "vtkSMRepresentationProxy.h"
 #include "vtkSMSessionProxyManager.h"
+#include "vtkSMSpreadSheetViewProxy.h"
 
-#if defined(PARAVIEW_ENABLE_PYTHON)
+#if PARAVIEW_PQCORE_ENABLE_PYTHON
 #include "pqPythonView.h"
 #endif
 
@@ -76,7 +76,7 @@ inline pqProxy* CreatePQView(
 {
   QObject* parent = NULL;
   QString xmlname = proxy->GetXMLName();
-  if (xmlname == pqSpreadSheetView::spreadsheetViewType())
+  if (vtkSMSpreadSheetViewProxy::SafeDownCast(proxy))
   {
     return new pqSpreadSheetView(group, name, proxy, server, parent);
   }
@@ -84,7 +84,7 @@ inline pqProxy* CreatePQView(
   {
     return new pqMultiSliceView(xmlname, group, name, proxy, server, parent);
   }
-#if defined(PARAVIEW_ENABLE_PYTHON)
+#if PARAVIEW_PQCORE_ENABLE_PYTHON
   if (xmlname == pqPythonView::pythonViewType())
   {
     return new pqPythonView(xmlname, group, name, proxy, server, parent);
@@ -117,11 +117,6 @@ inline pqProxy* CreatePQView(
       return new pqXYChartView(
         group, name, vtkSMContextViewProxy::SafeDownCast(proxy), server, parent);
     }
-    if (xmlname == "XYBagChartView")
-    {
-      return new pqXYBagChartView(
-        group, name, vtkSMContextViewProxy::SafeDownCast(proxy), server, parent);
-    }
     if (xmlname == "XYBarChartView")
     {
       return new pqXYBarChartView(
@@ -135,11 +130,6 @@ inline pqProxy* CreatePQView(
     if (xmlname == "BoxChartView")
     {
       return new pqBoxChartView(
-        group, name, vtkSMContextViewProxy::SafeDownCast(proxy), server, parent);
-    }
-    if (xmlname == "XYFunctionalBagChartView")
-    {
-      return new pqXYFunctionalBagChartView(
         group, name, vtkSMContextViewProxy::SafeDownCast(proxy), server, parent);
     }
     if (xmlname == "ParallelCoordinatesChartView")
@@ -194,6 +184,10 @@ pqProxy* pqStandardServerManagerModelInterface::createPQProxy(
     {
       return new pqPipelineSource(name, proxy, server, 0);
     }
+  }
+  else if (group == "extract_generators" && xml_type == "Extractor")
+  {
+    return new pqExtractGenerator(group, name, proxy, server);
   }
   else if (group == "timekeeper")
   {

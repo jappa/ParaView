@@ -33,15 +33,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "pqApplicationCore.h"
 #include "pqFileDialogModel.h"
-#include "pqImportCinemaReaction.h"
 #include "pqLoadDataReaction.h"
 #include "pqLoadStateReaction.h"
 #include "pqRecentlyUsedResourcesList.h"
 #include "pqServer.h"
+#include "pqServerConfiguration.h"
 #include "pqServerResource.h"
 
 #include <QFileInfo>
 #include <QtDebug>
+
+#include <cassert>
 
 //-----------------------------------------------------------------------------
 pqStandardRecentlyUsedResourceLoaderImplementation::
@@ -59,7 +61,7 @@ pqStandardRecentlyUsedResourceLoaderImplementation::
 //-----------------------------------------------------------------------------
 bool pqStandardRecentlyUsedResourceLoaderImplementation::canLoad(const pqServerResource& resource)
 {
-  return (resource.hasData("PARAVIEW_STATE") || resource.hasData("PARAVIEW_CINEMA_DATABASE") ||
+  return (resource.hasData("PARAVIEW_STATE") ||
     (resource.hasData("PARAVIEW_DATA") && resource.hasData("smgroup") &&
             resource.hasData("smname")));
 }
@@ -68,7 +70,7 @@ bool pqStandardRecentlyUsedResourceLoaderImplementation::canLoad(const pqServerR
 bool pqStandardRecentlyUsedResourceLoaderImplementation::load(
   const pqServerResource& resource, pqServer* server)
 {
-  Q_ASSERT(this->canLoad(resource));
+  assert(this->canLoad(resource));
   if (resource.hasData("PARAVIEW_STATE"))
   {
     return this->loadState(resource, server);
@@ -77,11 +79,6 @@ bool pqStandardRecentlyUsedResourceLoaderImplementation::load(
   {
     return this->loadData(resource, server);
   }
-  else if (resource.hasData("PARAVIEW_CINEMA_DATABASE"))
-  {
-    return this->loadCinemaDatabase(resource, server);
-  }
-
   return false;
 }
 
@@ -90,15 +87,11 @@ QIcon pqStandardRecentlyUsedResourceLoaderImplementation::icon(const pqServerRes
 {
   if (resource.hasData("PARAVIEW_STATE"))
   {
-    return QIcon(":/pqWidgets/Icons/pvIcon32.png");
+    return QIcon(":/pqWidgets/Icons/pvIcon.svg");
   }
   else if (resource.hasData("PARAVIEW_DATA"))
   {
     return QIcon(":/pqWidgets/Icons/pqMultiBlockData16.png");
-  }
-  else if (resource.hasData("PARAVIEW_CINEMA_DATABASE"))
-  {
-    return QIcon(":/pqWidgets/Icons/cinemascience_mark.png");
   }
   return QIcon();
 }
@@ -158,27 +151,18 @@ bool pqStandardRecentlyUsedResourceLoaderImplementation::loadData(
 }
 
 //-----------------------------------------------------------------------------
-bool pqStandardRecentlyUsedResourceLoaderImplementation::loadCinemaDatabase(
-  const pqServerResource& resource, pqServer* server)
-{
-  QString dbase = resource.path();
-
-  pqFileDialogModel fileModel(server, NULL);
-  if (dbase.isEmpty() || !fileModel.fileExists(dbase, dbase))
-  {
-    qCritical() << "Cinema database no longer exists : '" << dbase << "'";
-    return false;
-  }
-  return pqImportCinemaReaction::loadCinemaDatabase(dbase, server);
-}
-
-//-----------------------------------------------------------------------------
 bool pqStandardRecentlyUsedResourceLoaderImplementation::addDataFilesToRecentResources(
   pqServer* server, const QStringList& files, const QString& smgroup, const QString& smname)
 {
   if (server)
   {
+    // Needed to get the display resource in case of port forwarding
     pqServerResource resource = server->getResource();
+    pqServerConfiguration config = resource.configuration();
+    if (!config.isNameDefault())
+    {
+      resource = config.resource();
+    }
 
     resource.setPath(files[0]);
     resource.addData("PARAVIEW_DATA", "1");
@@ -203,32 +187,20 @@ bool pqStandardRecentlyUsedResourceLoaderImplementation::addStateFileToRecentRes
 {
   if (server)
   {
+    // Needed to get the display resource in case of port forwarding
+    pqServerResource tmpResource = server->getResource();
+    pqServerConfiguration config = tmpResource.configuration();
+    if (!config.isNameDefault())
+    {
+      tmpResource = config.resource();
+    }
+
     // Add this to the list of recent server resources ...
     pqServerResource resource;
     resource.setScheme("session");
     resource.setPath(filename);
-    resource.setSessionServer(server->getResource());
+    resource.setSessionServer(tmpResource);
     resource.addData("PARAVIEW_STATE", "1");
-    pqApplicationCore* core = pqApplicationCore::instance();
-    core->recentlyUsedResources().add(resource);
-    core->recentlyUsedResources().save(*core->settings());
-    return true;
-  }
-
-  return false;
-}
-
-//-----------------------------------------------------------------------------
-bool pqStandardRecentlyUsedResourceLoaderImplementation::addCinemaDatabaseToRecentResources(
-  pqServer* server, const QString& filename)
-{
-  if (server)
-  {
-    // Add this to the list of recent server resources ...
-    pqServerResource resource = server->getResource();
-    resource.setPath(filename);
-    resource.addData("PARAVIEW_CINEMA_DATABASE", "1");
-
     pqApplicationCore* core = pqApplicationCore::instance();
     core->recentlyUsedResources().add(resource);
     core->recentlyUsedResources().save(*core->settings());

@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqChangeInputDialog.h"
 #include "pqCollaborationManager.h"
 #include "pqCoreUtilities.h"
+#include "pqMenuReactionUtils.h"
 #include "pqObjectBuilder.h"
 #include "pqOutputPort.h"
 #include "pqPipelineFilter.h"
@@ -46,9 +47,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqSourcesMenuReaction.h"
 #include "pqUndoStack.h"
 #include "vtkSMCollaborationManager.h"
-#include "vtkSMDataTypeDomain.h"
 #include "vtkSMDocumentation.h"
-#include "vtkSMInputArrayDomain.h"
 #include "vtkSMInputProperty.h"
 #include "vtkSMPropertyHelper.h"
 #include "vtkSMPropertyIterator.h"
@@ -60,66 +59,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <QDebug>
 #include <QMap>
-
-static vtkSMInputProperty* getInputProperty(vtkSMProxy* proxy)
-{
-  // if "Input" is present, we return that, otherwise the "first"
-  // vtkSMInputProperty encountered is returned.
-
-  vtkSMInputProperty* prop = vtkSMInputProperty::SafeDownCast(proxy->GetProperty("Input"));
-  vtkSMPropertyIterator* propIter = proxy->NewPropertyIterator();
-  for (propIter->Begin(); !prop && !propIter->IsAtEnd(); propIter->Next())
-  {
-    prop = vtkSMInputProperty::SafeDownCast(propIter->GetProperty());
-  }
-
-  propIter->Delete();
-  return prop;
-}
-
-namespace
-{
-QString getDomainDisplayText(vtkSMDomain* domain, vtkSMInputProperty*)
-{
-  if (domain->IsA("vtkSMDataTypeDomain"))
-  {
-    QStringList types;
-    vtkSMDataTypeDomain* dtd = static_cast<vtkSMDataTypeDomain*>(domain);
-    for (unsigned int cc = 0; cc < dtd->GetNumberOfDataTypes(); cc++)
-    {
-      types << dtd->GetDataType(cc);
-    }
-
-    return QString("Input data must be %1").arg(types.join(" or "));
-  }
-  else if (domain->IsA("vtkSMInputArrayDomain"))
-  {
-    vtkSMInputArrayDomain* iad = static_cast<vtkSMInputArrayDomain*>(domain);
-    QString txt = (iad->GetAttributeType() == vtkSMInputArrayDomain::ANY
-        ? QString("Requires an attribute array")
-        : QString("Requires a %1 attribute array").arg(iad->GetAttributeTypeAsString()));
-    std::vector<int> numbersOfComponents = iad->GetAcceptableNumbersOfComponents();
-    if (numbersOfComponents.size() > 0)
-    {
-      txt += QString(" with ");
-      for (unsigned int i = 0; i < numbersOfComponents.size(); i++)
-      {
-        if (i == numbersOfComponents.size() - 1)
-        {
-          txt += QString("%1 ").arg(numbersOfComponents[i]);
-        }
-        else
-        {
-          txt += QString("%1 or ").arg(numbersOfComponents[i]);
-        }
-      }
-      txt += QString("component(s)");
-    }
-    return txt;
-  }
-  return QString("Requirements not met");
-}
-}
+#include <string>
+#include <vector>
 
 //-----------------------------------------------------------------------------
 pqFiltersMenuReaction::pqFiltersMenuReaction(
@@ -229,8 +170,24 @@ void pqFiltersMenuReaction::updateEnableState(bool updateOnlyToolbars)
   mgr->setEnabled(enabled);
 
   bool some_enabled = false;
-  const QList<QAction*>& actionsList =
-    updateOnlyToolbars ? mgr->actionsInToolbars() : mgr->actions();
+  QList<QAction*> actionsList;
+  if (updateOnlyToolbars)
+  {
+    actionsList += mgr->actionsInToolbars();
+    const QList<QAction*>& allActions = mgr->actions();
+    for (QAction* action : allActions)
+    {
+      // If the action has a keyboard shortcut it must always be updated.
+      if (action->shortcut() != QKeySequence())
+      {
+        actionsList.append(action);
+      }
+    }
+  }
+  else
+  {
+    actionsList = mgr->actions();
+  }
   foreach (QAction* action, actionsList)
   {
     vtkSMProxy* prototype = mgr->getPrototype(action);
@@ -269,7 +226,7 @@ void pqFiltersMenuReaction::updateEnableState(bool updateOnlyToolbars)
     }
 
     // TODO: Handle case where a proxy has multiple input properties.
-    vtkSMInputProperty* input = ::getInputProperty(prototype);
+    vtkSMInputProperty* input = pqMenuReactionUtils::getInputProperty(prototype);
     if (input)
     {
       if (!input->GetMultipleInput() && outputPorts.size() > 1)
@@ -308,7 +265,7 @@ void pqFiltersMenuReaction::updateEnableState(bool updateOnlyToolbars)
         }
         // Here we need to go to the domain that returned false and find out why
         // it said the domain criteria wasn't met.
-        action->setStatusTip(::getDomainDisplayText(domain, input));
+        action->setStatusTip(pqMenuReactionUtils::getDomainDisplayText(domain));
       }
       input->RemoveAllUncheckedProxies();
     }
@@ -328,7 +285,7 @@ void pqFiltersMenuReaction::updateEnableState(bool updateOnlyToolbars)
     for (QAction* menuAction : menuActions)
     {
       if (menuAction->isSeparator() || !menuAction->menu() ||
-        menuAction->menu() == mgr->getBookmarksMenu())
+        menuAction->menu() == mgr->getFavoritesMenu())
       {
         continue;
       }

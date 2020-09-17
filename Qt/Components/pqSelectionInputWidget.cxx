@@ -292,15 +292,6 @@ void pqSelectionInputWidget::updateLabels()
 }
 
 //-----------------------------------------------------------------------------
-void pqSelectionInputWidget::initializeDefaultValueIfNeeded()
-{
-  if (!this->SelectionSource)
-  {
-    this->copyActiveSelection();
-  }
-}
-
-//-----------------------------------------------------------------------------
 // This will update the UnacceptedSelectionSource proxy with a clone of the
 // active selection proxy. The filter proxy is not modified yet.
 void pqSelectionInputWidget::copyActiveSelection()
@@ -347,7 +338,7 @@ void pqSelectionInputWidget::setSelection(pqSMProxy newSelection)
   this->SelectionSource = newSelection;
 
   this->updateLabels();
-  emit this->selectionChanged(this->SelectionSource);
+  Q_EMIT this->selectionChanged(this->SelectionSource);
 }
 
 //-----------------------------------------------------------------------------

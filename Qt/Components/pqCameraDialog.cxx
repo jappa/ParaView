@@ -153,7 +153,7 @@ public:
     this->PlusButton = new QToolButton();
     this->PlusButton->setObjectName("AddButton");
     this->PlusButton->setToolTip(QToolButton::tr("Add Current Viewpoint"));
-    this->PlusButton->setIcon(QIcon(":/QtWidgets/Icons/pqPlus16.png"));
+    this->PlusButton->setIcon(QIcon(":/QtWidgets/Icons/pqPlus.svg"));
     this->PlusButton->setMinimumSize(QSize(34, 34));
   }
 
@@ -298,56 +298,47 @@ void pqCameraDialog::setupGUI()
     vtkSMRenderViewProxy* proxy = this->Internal->RenderModule->getRenderViewProxy();
     proxy->SynchronizeCameraProperties();
 
-    this->Internal->position0->setValidator(new QDoubleValidator(this->Internal->position0));
-    this->Internal->position1->setValidator(new QDoubleValidator(this->Internal->position1));
-    this->Internal->position2->setValidator(new QDoubleValidator(this->Internal->position2));
-
-    this->Internal->focalPoint0->setValidator(new QDoubleValidator(this->Internal->focalPoint0));
-    this->Internal->focalPoint1->setValidator(new QDoubleValidator(this->Internal->focalPoint1));
-    this->Internal->focalPoint2->setValidator(new QDoubleValidator(this->Internal->focalPoint2));
-
-    this->Internal->viewUp0->setValidator(new QDoubleValidator(this->Internal->viewUp0));
-    this->Internal->viewUp1->setValidator(new QDoubleValidator(this->Internal->viewUp1));
-    this->Internal->viewUp2->setValidator(new QDoubleValidator(this->Internal->viewUp2));
-
-    this->Internal->CenterX->setValidator(new QDoubleValidator(this->Internal->CenterX));
-    this->Internal->CenterY->setValidator(new QDoubleValidator(this->Internal->CenterY));
-    this->Internal->CenterZ->setValidator(new QDoubleValidator(this->Internal->CenterZ));
-
     this->Internal->CameraLinks.removeAllPropertyLinks();
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->position0, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraPosition"), 0);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->position1, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraPosition"), 1);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->position2, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraPosition"), 2);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->position0, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraPosition"), 0);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->position1, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraPosition"), 1);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->position2, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraPosition"), 2);
 
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalPoint0, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraFocalPoint"), 0);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalPoint1, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraFocalPoint"), 1);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalPoint2, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraFocalPoint"), 2);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalPoint0, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraFocalPoint"), 0);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalPoint1, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraFocalPoint"), 1);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalPoint2, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraFocalPoint"), 2);
 
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->viewUp0, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraViewUp"), 0);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->viewUp1, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraViewUp"), 1);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->viewUp2, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CameraViewUp"), 2);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->viewUp0, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraViewUp"), 0);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->viewUp1, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraViewUp"), 1);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->viewUp2, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CameraViewUp"), 2);
 
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->CenterX, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CenterOfRotation"), 0);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->CenterY, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CenterOfRotation"), 1);
-    this->Internal->CameraLinks.addPropertyLink(this->Internal->CenterZ, "text",
-      SIGNAL(editingFinished()), proxy, proxy->GetProperty("CenterOfRotation"), 2);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->CenterX, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CenterOfRotation"), 0);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->CenterY, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CenterOfRotation"), 1);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->CenterZ, "text2",
+      SIGNAL(textChangedAndEditingFinished()), proxy, proxy->GetProperty("CenterOfRotation"), 2);
 
     this->Internal->CameraLinks.addPropertyLink(this->Internal->rotationFactor, "value",
       SIGNAL(valueChanged(double)), proxy, proxy->GetProperty("RotationFactor"), 0);
 
     this->Internal->CameraLinks.addPropertyLink(this->Internal->viewAngle, "value",
       SIGNAL(valueChanged(double)), proxy, proxy->GetProperty("CameraViewAngle"), 0);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->eyeAngle, "value",
+      SIGNAL(valueChanged(double)), proxy, proxy->GetProperty("EyeAngle"), 0);
+
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalDisk, "value",
+      SIGNAL(valueChanged(double)), proxy, proxy->GetProperty("CameraFocalDisk"), 0);
+    this->Internal->CameraLinks.addPropertyLink(this->Internal->focalDistance, "value",
+      SIGNAL(valueChanged(double)), proxy, proxy->GetProperty("CameraFocalDistance"), 0);
 
     QObject::connect(&this->Internal->CameraLinks, SIGNAL(qtWidgetChanged()),
       this->Internal->RenderModule, SLOT(render()));
@@ -387,15 +378,14 @@ void pqCameraDialog::setupGUI()
 //-----------------------------------------------------------------------------
 void pqCameraDialog::updateInteractiveViewLinkWidgets()
 {
-  if (this->Internal->interactiveViewLinkComboBox->count() == 0)
-  {
-    this->Internal->interactiveViewLinkGroup->setEnabled(false);
-    this->Internal->interactiveViewLinkGroup->setCollapsed(true);
-  }
-  else
-  {
-    this->Internal->interactiveViewLinkGroup->setEnabled(true);
+  const bool enabled = (this->Internal->interactiveViewLinkComboBox->count() > 0);
 
+  this->Internal->interactiveViewLinkComboBox->setEnabled(enabled);
+  this->Internal->interactiveViewLinkBackground->setEnabled(enabled);
+  this->Internal->interactiveViewLinkOpacity->setEnabled(enabled);
+
+  if (enabled)
+  {
     pqInteractiveViewLink* ivLink = static_cast<pqInteractiveViewLink*>(
       this->Internal->interactiveViewLinkComboBox
         ->itemData(this->Internal->interactiveViewLinkComboBox->currentIndex())
@@ -435,9 +425,46 @@ void pqCameraDialog::setInteractiveViewLinkBackground(bool hideBackground)
 //-----------------------------------------------------------------------------
 void pqCameraDialog::SetCameraGroupsEnabled(bool enabled)
 {
-  this->Internal->viewsGroup->setEnabled(enabled);
-  this->Internal->positionsGroup->setEnabled(enabled);
-  this->Internal->orientationsGroup->setEnabled(enabled);
+  auto& internal = (*this->Internal);
+  internal.viewXMinus->setEnabled(enabled);
+  internal.viewXPlus->setEnabled(enabled);
+  internal.viewYMinus->setEnabled(enabled);
+  internal.viewYPlus->setEnabled(enabled);
+  internal.viewZMinus->setEnabled(enabled);
+  internal.viewZPlus->setEnabled(enabled);
+
+  internal.customViewpointGridLayout->setEnabled(enabled);
+  internal.configureCustomViewpoints->setEnabled(enabled);
+
+  internal.CenterX->setEnabled(enabled);
+  internal.CenterY->setEnabled(enabled);
+  internal.CenterZ->setEnabled(enabled);
+  internal.AutoResetCenterOfRotation->setEnabled(enabled);
+
+  internal.rotationFactor->setEnabled(enabled);
+
+  internal.position0->setEnabled(enabled);
+  internal.position1->setEnabled(enabled);
+  internal.position2->setEnabled(enabled);
+  internal.focalPoint0->setEnabled(enabled);
+  internal.focalPoint1->setEnabled(enabled);
+  internal.focalPoint2->setEnabled(enabled);
+  internal.viewUp0->setEnabled(enabled);
+  internal.viewUp1->setEnabled(enabled);
+  internal.viewUp2->setEnabled(enabled);
+  internal.viewAngle->setEnabled(enabled);
+  internal.loadCameraConfiguration->setEnabled(enabled);
+  internal.saveCameraConfiguration->setEnabled(enabled);
+
+  internal.rollButton->setEnabled(enabled);
+  internal.rollAngle->setEnabled(enabled);
+  internal.elevationButton->setEnabled(enabled);
+  internal.elevationAngle->setEnabled(enabled);
+  internal.azimuthButton->setEnabled(enabled);
+  internal.azimuthAngle->setEnabled(enabled);
+  internal.zoomInButton->setEnabled(enabled);
+  internal.zoomFactor->setEnabled(enabled);
+  internal.zoomOutButton->setEnabled(enabled);
 }
 
 //-----------------------------------------------------------------------------
@@ -592,7 +619,8 @@ bool pqCameraDialog::configureCustomViewpoints(
   QString currentConfig(os.str().c_str());
 
   // user modifies the configuration
-  pqCustomViewpointButtonDialog dialog(parentWidget, 0, toolTips, configs, currentConfig);
+  pqCustomViewpointButtonDialog dialog(
+    parentWidget, Qt::WindowFlags{}, toolTips, configs, currentConfig);
   if (dialog.exec() == QDialog::Accepted)
   {
     // save the new configuration into the app wide settings.

@@ -33,7 +33,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define pqPythonManager_h
 
 #include "pqPythonModule.h" // for exports
-#include "vtkSetGet.h"      // for VTK_LEGACY
 
 #include <QObject>
 
@@ -61,18 +60,15 @@ public:
   ~pqPythonManager() override;
 
   /**
+   * Convienience method to call `vtkPythonInterpreter::Initialize()`.
+   */
+  bool initializeInterpreter();
+
+  /**
    * Returns true if the interpreter has been initialized.
    * Same as calling `vtkPythonInterpreter::IsInitialized()`.
    */
   bool interpreterIsInitialized();
-
-  /**
-   * Return the python shell dialog.  This will cause the interpreter to be initialized
-   * if it has not been already.
-   * @deprecated ParaView 5.5. Applications should directly create pqPythonShell
-   * as needed.
-   */
-  VTK_LEGACY(pqPythonDialog* pythonShellDialog());
 
   //@{
   /**
@@ -86,15 +82,6 @@ public:
   //@}
 
   /**
-   * Show the python editor with the trace in it.
-   * If txt is empty, the editor will obtain the state from active vtkSMTrace
-   * instance, if any.
-   * @deprecated ParaView 5.5. Applications should directly create and use
-   * pqPythonScriptEditor as needed.
-   */
-  VTK_LEGACY(void editTrace(const QString& txt = QString(), bool update = false));
-
-  /**
    * Save the macro in ParaView configuration and update widget automatically
    */
   void addMacro(const QString& fileName);
@@ -105,7 +92,7 @@ public:
    */
   void updateMacroList();
 
-public slots:
+public Q_SLOTS:
   /**
    * Executes the given script.  If the python interpreter hasn't been initialized
    * yet it will be initialized.
@@ -123,17 +110,6 @@ public slots:
    * Launch python editor to edit the macro
    */
   void editMacro(const QString& fileName);
-
-protected slots:
-  /**
-   * Whenever we are about to disconnect from a server, we "reset" the Python
-   * shell, if created. This will ensure all Python objects created by the shell
-   * are released.
-   */
-  void onRemovingServer(pqServer* server);
-
-protected:
-  VTK_LEGACY(QString getTraceString());
 
 private:
   class pqInternal;

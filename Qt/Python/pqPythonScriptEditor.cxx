@@ -45,9 +45,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QTextStream>
@@ -60,7 +62,14 @@ pqPythonScriptEditor::pqPythonScriptEditor(QWidget* p)
 {
   this->pythonManager = NULL;
   this->TextEdit = new QTextEdit;
-  this->TextEdit->setTabStopWidth(4);
+// tab is 4 spaces
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 11, 0))
+  this->TextEdit->setTabStopDistance(this->fontMetrics().horizontalAdvance("    "));
+#elif (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+  this->TextEdit->setTabStopDistance(this->fontMetrics().width("    "));
+#else
+  this->TextEdit->setTabStopWidth(this->fontMetrics().width("    "));
+#endif
   this->setCentralWidget(this->TextEdit);
   this->createActions();
   this->createMenus();
@@ -351,7 +360,7 @@ bool pqPythonScriptEditor::saveFile(const QString& fileName)
 
   this->setCurrentFile(fileName);
   this->statusBar()->showMessage(tr("File saved"), 2000);
-  emit this->fileSaved();
+  Q_EMIT this->fileSaved();
   return true;
 }
 
@@ -379,4 +388,10 @@ void pqPythonScriptEditor::setCurrentFile(const QString& fileName)
 QString pqPythonScriptEditor::strippedName(const QString& fullFileName)
 {
   return QFileInfo(fullFileName).fileName();
+}
+
+//-----------------------------------------------------------------------------
+void pqPythonScriptEditor::scrollToBottom()
+{
+  this->TextEdit->verticalScrollBar()->setValue(this->TextEdit->verticalScrollBar()->maximum());
 }

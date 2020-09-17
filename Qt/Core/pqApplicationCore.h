@@ -33,12 +33,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define pqApplicationCore_h
 
 #include "pqCoreModule.h"
-#include "vtkSetGet.h" // for VTK_LEGACY
+#include "vtkPVConfig.h" // for PARAVIEW_USE_QTHELP
 #include <QObject>
 #include <QPointer>
 
 class pqInterfaceTracker;
 class pqLinksModel;
+class pqMainWindowEventManager;
 class pqObjectBuilder;
 class pqOptions;
 class pqPipelineSource;
@@ -61,10 +62,6 @@ class QStringList;
 class vtkPVXMLElement;
 class vtkSMProxyLocator;
 class vtkSMStateLoader;
-
-#if !defined(VTK_LEGACY_REMOVE)
-class pqDisplayPolicy;
-#endif
 
 /**
 * This class is the crux of the ParaView application. It creates
@@ -184,6 +181,14 @@ public:
   pqLinksModel* getLinksModel() const { return this->LinksModel; }
 
   /**
+  * pqMainWindowManager manages signals called for main window events.
+  */
+  pqMainWindowEventManager* getMainWindowEventManager() const
+  {
+    return this->MainWindowEventManager;
+  }
+
+  /**
   * pqPluginManager manages all functionality associated with loading plugins.
   */
   pqPluginManager* getPluginManager() const { return this->PluginManager; }
@@ -192,16 +197,6 @@ public:
   * ProgressManager is the manager that streamlines progress.
   */
   pqProgressManager* getProgressManager() const { return this->ProgressManager; }
-
-  /**
-  * @deprecated ParaView 5.5.  See vtkSMParaViewPipelineControllerWithRendering.
-  */
-  VTK_LEGACY(pqDisplayPolicy* getDisplayPolicy() const);
-
-  /**
-  * @deprecated ParaView 5.5. See vtkSMParaViewPipelineControllerWithRendering.
-  */
-  VTK_LEGACY(void setDisplayPolicy(pqDisplayPolicy* dp));
 
   /**
   * Provides access to the test utility.
@@ -236,10 +231,15 @@ public:
   void clearSettings();
 
   /**
-  * Save the ServerManager state.
+  * Save the ServerManager state to a XML element.
   */
   vtkPVXMLElement* saveState();
-  void saveState(const QString& filename);
+
+  /**
+  * Save the ServerManager state to a file.
+  * Return true if the operation succeeded otherwise return false.
+  */
+  bool saveState(const QString& filename);
 
   /**
   * Loads the ServerManager state. Emits the signal
@@ -289,17 +289,16 @@ public:
   pqServer* getActiveServer() const;
 
   /**
-  * Called to load the configuration xml bundled with the application the
-  * lists the plugins that the application is aware by default. If no filename
-  * is specified, {executable-path}/.plugins is loaded.
-  */
-  void loadDistributedPlugins(const char* filename = 0);
-
-  /**
   * Destructor.
   */
   ~pqApplicationCore() override;
-public slots:
+
+  /**
+   * INTERNAL. Do not use.
+   */
+  void _paraview_client_environment_complete();
+
+public Q_SLOTS:
 
   /**
   * Applications calls this to ensure
@@ -325,7 +324,7 @@ public slots:
   */
   void render();
 
-signals:
+Q_SIGNALS:
   /**
   * Fired before a state xml is being loaded. One can add slots for this signal
   * and modify the fired xml-element as part of pre-processing before
@@ -369,22 +368,33 @@ signals:
   */
   void updateMasterEnableState(bool);
 
-protected slots:
+  /**
+   * Fired when the ParaView Client infrastructure has completed setting up the
+   * environment.
+   */
+  void clientEnvironmentDone();
+
+protected Q_SLOTS:
   void onStateLoaded(vtkPVXMLElement* root, vtkSMProxyLocator* locator);
   void onStateSaved(vtkPVXMLElement* root);
   void onHelpEngineWarning(const QString&);
+
+private Q_SLOTS:
+  /**
+   * called when vtkPVGeneralSettings::GetInstance() fired
+   * `vtkCommand::ModifiedEvent`. We update pqDoubleLineEdit's global precision
+   * settings.
+   */
+  void generalSettingsChanged();
 
 protected:
   bool LoadingState;
 
   pqOptions* Options;
-
-#if !defined(VTK_LEGACY_REMOVE)
-  pqDisplayPolicy* DisplayPolicy;
-#endif
   pqLinksModel* LinksModel;
   pqObjectBuilder* ObjectBuilder;
   pqInterfaceTracker* InterfaceTracker;
+  pqMainWindowEventManager* MainWindowEventManager;
   pqPluginManager* PluginManager;
   pqProgressManager* ProgressManager;
   pqServerManagerModel* ServerManagerModel;

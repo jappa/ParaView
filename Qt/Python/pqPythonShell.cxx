@@ -39,6 +39,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqApplicationCore.h"
 #include "pqConsoleWidget.h"
 #include "pqFileDialog.h"
+#include "pqPythonShellCompleter.h"
 #include "pqUndoStack.h"
 
 #include "vtkCommand.h"
@@ -50,9 +51,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkPythonInteractiveInterpreter.h"
 #include "vtkPythonInterpreter.h"
 #include "vtkSmartPointer.h"
-#include "vtkStdString.h"
 #include "vtkStringOutputWindow.h"
-#include "vtkWeakPointer.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
@@ -65,157 +64,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QVBoxLayout>
 #include <QtDebug>
 
+#include <cassert>
+
 QStringList pqPythonShell::Preamble;
-
-class pqPythonShellCompleter : public pqConsoleWidgetCompleter
-{
-  vtkWeakPointer<vtkPythonInteractiveInterpreter> Interpreter;
-
-public:
-  pqPythonShellCompleter(pqPythonShell& p, vtkPythonInteractiveInterpreter* interp)
-  {
-    this->Interpreter = interp;
-    this->setParent(&p);
-  }
-
-  void updateCompletionModel(const QString& completion) override
-  {
-    // Start by clearing the model
-    this->setModel(0);
-
-    // Don't try to complete the empty string
-    if (completion.isEmpty())
-    {
-      return;
-    }
-
-    // Search backward through the string for usable characters
-    QString textToComplete;
-    for (int i = completion.length() - 1; i >= 0; --i)
-    {
-      QChar c = completion.at(i);
-      if (c.isLetterOrNumber() || c == '.' || c == '_')
-      {
-        textToComplete.prepend(c);
-      }
-      else
-      {
-        break;
-      }
-    }
-
-    // Split the string at the last dot, if one exists
-    QString lookup;
-    QString compareText = textToComplete;
-    int dot = compareText.lastIndexOf('.');
-    if (dot != -1)
-    {
-      lookup = compareText.mid(0, dot);
-      compareText = compareText.mid(dot + 1);
-    }
-
-    // Lookup python names
-    QStringList attrs;
-    if (!lookup.isEmpty() || !compareText.isEmpty())
-    {
-      attrs = this->getPythonAttributes(lookup);
-    }
-
-    // Initialize the completion model
-    if (!attrs.isEmpty())
-    {
-      this->setCompletionMode(QCompleter::PopupCompletion);
-      this->setModel(new QStringListModel(attrs, this));
-      this->setCaseSensitivity(Qt::CaseInsensitive);
-      this->setCompletionPrefix(compareText.toLower());
-      this->popup()->setCurrentIndex(this->completionModel()->index(0, 0));
-    }
-  }
-
-  /// Given a python variable name, lookup its attributes and return them in a
-  /// string list.
-  QStringList getPythonAttributes(const QString& pythonObjectName)
-  {
-    vtkPythonScopeGilEnsurer gilEnsurer;
-    if (this->Interpreter == NULL ||
-      this->Interpreter->GetInteractiveConsoleLocalsPyObject() == NULL)
-    {
-      return QStringList();
-    }
-
-    PyObject* object =
-      reinterpret_cast<PyObject*>(this->Interpreter->GetInteractiveConsoleLocalsPyObject());
-    Py_INCREF(object);
-
-    if (!pythonObjectName.isEmpty())
-    {
-      QStringList tmpNames = pythonObjectName.split('.');
-      for (int i = 0; i < tmpNames.size() && object; ++i)
-      {
-        QByteArray tmpName = tmpNames.at(i).toLocal8Bit();
-        PyObject* prevObj = object;
-        if (PyDict_Check(object))
-        {
-          object = PyDict_GetItemString(object, tmpName.data());
-          Py_XINCREF(object);
-        }
-        else
-        {
-          object = PyObject_GetAttrString(object, tmpName.data());
-        }
-        Py_DECREF(prevObj);
-      }
-      PyErr_Clear();
-    }
-
-    QStringList results;
-    if (object)
-    {
-      PyObject* keys = NULL;
-      bool is_dict = PyDict_Check(object);
-      if (is_dict)
-      {
-        keys = PyDict_Keys(object); // returns *new* reference.
-      }
-      else
-      {
-        keys = PyObject_Dir(object); // returns *new* reference.
-      }
-      if (keys)
-      {
-        PyObject* key;
-        PyObject* value;
-        QString keystr;
-        int nKeys = PyList_Size(keys);
-        for (int i = 0; i < nKeys; ++i)
-        {
-          key = PyList_GetItem(keys, i);
-          if (is_dict)
-          {
-            value = PyDict_GetItem(object, key); // Return value: Borrowed reference.
-            Py_XINCREF(value);                   // so we can use Py_DECREF later.
-          }
-          else
-          {
-            value = PyObject_GetAttr(object, key); // Return value: New reference.
-          }
-          if (!value)
-          {
-            continue;
-          }
-          results << PyString_AsString(key);
-          Py_DECREF(value);
-
-          // Clear out any errors that may have occurred.
-          PyErr_Clear();
-        }
-        Py_DECREF(keys);
-      }
-      Py_DECREF(object);
-    }
-    return results;
-  }
-};
 
 //-----------------------------------------------------------------------------
 class pqPythonShellOutputWindow : public vtkOutputWindow
@@ -289,11 +140,11 @@ public:
    */
   void begin()
   {
-    Q_ASSERT(this->ExecutionCounter >= 0);
+    assert(this->ExecutionCounter >= 0);
     if (this->ExecutionCounter == 0)
     {
-      Q_ASSERT(this->OldInstance == nullptr);
-      emit this->Parent->executing(true);
+      assert(this->OldInstance == nullptr);
+      Q_EMIT this->Parent->executing(true);
 
       if (this->isInterpreterInitialized() == false)
       {
@@ -315,14 +166,14 @@ public:
   void end()
   {
     this->ExecutionCounter--;
-    Q_ASSERT(this->ExecutionCounter >= 0);
+    assert(this->ExecutionCounter >= 0);
     if (this->ExecutionCounter == 0)
     {
       vtkPythonInterpreter::SetCaptureStdin(this->OldCapture);
       this->OldCapture = false;
       vtkOutputWindow::SetInstance(this->OldInstance);
       this->OldInstance = nullptr;
-      emit this->Parent->executing(false);
+      Q_EMIT this->Parent->executing(false);
     }
   }
 
@@ -353,7 +204,7 @@ private:
     QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
     vtkPythonInterpreter::Initialize();
-    Q_ASSERT(vtkPythonInterpreter::IsInitialized());
+    assert(vtkPythonInterpreter::IsInitialized());
 
     // Print the default Python interpreter greeting.
     this->Parent->printString(
@@ -403,7 +254,7 @@ pqPythonShell::pqPythonShell(QWidget* parentObject, Qt::WindowFlags _flags)
 
   // Setup completer for the console widget.
   pqPythonShellCompleter* completer =
-    new pqPythonShellCompleter(*this, this->Internals->interpreter());
+    new pqPythonShellCompleter(this, this->Internals->interpreter());
   ui.consoleWidget->setCompleter(completer);
 
   // Accept user input from the console and push it into the Python interpreter.
@@ -465,11 +316,11 @@ void pqPythonShell::printString(const QString& text, pqPythonShell::PrintMode mo
 
       case STATUS:
       default:
-        format.setForeground(QColor(0, 0, 150));
+        format.setForeground(QApplication::palette().highlight().color());
     }
     consoleWidget->setFormat(format);
     consoleWidget->printString(string);
-    format.setForeground(QColor(0, 0, 0));
+    format.setForeground(QApplication::palette().windowText().color());
     consoleWidget->setFormat(format);
 
     this->Prompted = false;
@@ -498,7 +349,7 @@ bool pqPythonShell::prompt(const QString& indent)
 
     Ui::PythonShell& ui = this->Internals->Ui;
     QTextCharFormat format = ui.consoleWidget->getFormat();
-    format.setForeground(QColor(0, 0, 0));
+    format.setForeground(QApplication::palette().windowText().color());
     ui.consoleWidget->setFormat(format);
     ui.consoleWidget->prompt(this->Prompt);
     ui.consoleWidget->printCommand(indent);
@@ -587,7 +438,7 @@ void pqPythonShell::HandleInterpreterEvents(vtkObject*, unsigned long eventid, v
   {
     case vtkCommand::UpdateEvent:
     {
-      vtkStdString* strData = reinterpret_cast<vtkStdString*>(calldata);
+      std::string* strData = reinterpret_cast<std::string*>(calldata);
       bool ok;
       QString inputText = QInputDialog::getText(this, tr("Enter Input requested by Python"),
         tr("Input: "), QLineEdit::Normal, QString(), &ok);
@@ -614,7 +465,11 @@ void pqPythonShell::runScript()
       QFile file(filename);
       if (file.open(QIODevice::ReadOnly))
       {
-        QByteArray code = file.readAll();
+        QByteArray code;
+        // First inject code to let the script know its own path
+        code.append(QString("__file__ = r'%1'\n").arg(filename));
+        // Then append the file content
+        code.append(file.readAll());
         this->executeScript(code.data());
       }
       else

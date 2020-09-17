@@ -52,6 +52,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QTextStream>
 #include <QtDebug>
 
+#include <cassert>
+
 //-----------------------------------------------------------------------------
 pqSaveStateReaction::pqSaveStateReaction(QAction* parentObject)
   : Superclass(parentObject)
@@ -74,7 +76,7 @@ void pqSaveStateReaction::updateEnableState()
 //-----------------------------------------------------------------------------
 bool pqSaveStateReaction::saveState()
 {
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   QString fileExt = tr("ParaView state file (*.pvsm);;Python state file (*.py);;All files (*)");
 #else
   QString fileExt = tr("ParaView state file (*.pvsm);;All files (*)");
@@ -102,27 +104,32 @@ bool pqSaveStateReaction::saveState()
 }
 
 //-----------------------------------------------------------------------------
-void pqSaveStateReaction::saveState(const QString& filename)
+bool pqSaveStateReaction::saveState(const QString& filename)
 {
-  pqApplicationCore::instance()->saveState(filename);
+  if (!pqApplicationCore::instance()->saveState(filename))
+  {
+    qCritical() << "Failed to save " << filename;
+    return false;
+  }
   pqServer* server = pqActiveObjects::instance().activeServer();
   // Add this to the list of recent server resources ...
   pqStandardRecentlyUsedResourceLoaderImplementation::addStateFileToRecentResources(
     server, filename);
+  return true;
 }
 
 //-----------------------------------------------------------------------------
-void pqSaveStateReaction::savePythonState(const QString& filename)
+bool pqSaveStateReaction::savePythonState(const QString& filename)
 {
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   vtkSMSessionProxyManager* pxm = pqActiveObjects::instance().proxyManager();
-  Q_ASSERT(pxm);
+  assert(pxm);
 
   vtkSmartPointer<vtkSMProxy> options;
   options.TakeReference(pxm->NewProxy("pythontracing", "PythonStateOptions"));
   if (options.GetPointer() == NULL)
   {
-    return;
+    return false;
   }
 
   vtkNew<vtkSMParaViewPipelineController> controller;
@@ -134,31 +141,31 @@ void pqSaveStateReaction::savePythonState(const QString& filename)
   dialog.setApplyChangesImmediately(true);
   if (dialog.exec() != QDialog::Accepted)
   {
-    return;
+    return false;
   }
 
-  vtkStdString state =
-    vtkSMTrace::GetState(vtkSMPropertyHelper(options, "PropertiesToTraceOnCreate").GetAsInt(),
-      vtkSMPropertyHelper(options, "SkipHiddenDisplayProperties").GetAsInt() == 1);
+  std::string state = vtkSMTrace::GetState(options);
   if (state.empty())
   {
     qWarning("Empty state generated.");
-    return;
+    return false;
   }
   QFile file(filename);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
   {
     qWarning() << "Could not open file:" << filename;
-    return;
+    return false;
   }
   QTextStream out(&file);
-  out << state;
+  out << state.c_str();
   pqServer* server = pqActiveObjects::instance().activeServer();
   // Add this to the list of recent server resources ...
   pqStandardRecentlyUsedResourceLoaderImplementation::addStateFileToRecentResources(
     server, filename);
+  return true;
 #else
   qCritical() << "Failed to save '" << filename
               << "' since Python support in not enabled in this build.";
+  return false;
 #endif
 }

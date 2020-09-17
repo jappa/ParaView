@@ -37,6 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QList>
 #include <QObject>
 
+class pqExtractGenerator;
 class pqPipelineSource;
 class pqProxy;
 class pqRepresentation;
@@ -218,7 +219,7 @@ public:
   static pqServerManagerModelItem* findItemHelper(
     const pqServerManagerModel* const model, const QMetaObject& mo, const QString& name);
 
-signals:
+Q_SIGNALS:
   /**
   * Signals emitted when a new pqServer object is created.
   */
@@ -304,9 +305,18 @@ signals:
   void preRepresentationRemoved(pqRepresentation*);
   void representationRemoved(pqRepresentation*);
 
+  //@{
   /**
-  * Fired when the name of an item changes.
-  */
+   * Signals figured for pqExtractGenerator.
+   */
+  void preExtractGeneratorAdded(pqExtractGenerator*);
+  void extractGeneratorAdded(pqExtractGenerator*);
+  void preExtractGeneratorRemoved(pqExtractGenerator*);
+  void extractGeneratorRemoved(pqExtractGenerator*);
+  //@}
+  /**
+   * Fired when the name of an item changes.
+   */
   void nameChanged(pqServerManagerModelItem* item);
 
   /**
@@ -327,13 +337,21 @@ signals:
   void preConnectionRemoved(
     pqPipelineSource* source, pqPipelineSource* consumer, int srcOutputPort);
 
+  //@{
+  /**
+   * Signals fired to notify changes to extract-generator connections.
+   */
+  void connectionAdded(pqServerManagerModelItem* source, pqExtractGenerator* consumer);
+  void connectionRemoved(pqServerManagerModelItem* source, pqExtractGenerator* consumer);
+  //@}
+
   /**
   * Fired when a source indicates that data was updated i.e. the pipeline was
   * updated.
   */
   void dataUpdated(pqPipelineSource*);
 
-protected slots:
+protected Q_SLOTS:
   /**
   * Called when a proxy is registered.
   */

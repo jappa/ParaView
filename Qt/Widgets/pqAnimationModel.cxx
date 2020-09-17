@@ -32,6 +32,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "pqAnimationModel.h"
 
+#include "assert.h"
+
 #include <QEvent>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsView>
@@ -42,6 +44,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqAnimationTrack.h"
 #include "pqCheckBoxPixMaps.h"
 
+#include <cassert>
 #include <iostream>
 
 pqAnimationModel::pqAnimationModel(QGraphicsView* p)
@@ -274,7 +277,7 @@ double pqAnimationModel::timeFromTick(int tick)
 {
   if (this->Mode == Custom)
   {
-    Q_ASSERT(tick <= this->CustomTicks.size());
+    assert(tick <= this->CustomTicks.size());
     return this->CustomTicks[tick];
   }
 
@@ -338,8 +341,8 @@ void pqAnimationModel::drawForeground(QPainter* painter, const QRectF&)
 
   // make background for time labels white
   painter->save();
-  painter->setBrush(QColor(255, 255, 255));
-  painter->setPen(QColor());
+  painter->setBrush(this->palette().base());
+  painter->setPen(Qt::NoPen);
   painter->drawRect(labelRect);
   painter->restore();
 
@@ -352,6 +355,8 @@ void pqAnimationModel::drawForeground(QPainter* painter, const QRectF&)
   num = num == 0 ? 1 : num;
   double w = labelRect.width() / num;
 
+  painter->save();
+  painter->setPen(this->palette().color(QPalette::Text));
   painter->drawText(QRectF(labelRect.left(), labelRect.top(), w / 2.0, rh),
     Qt::AlignLeft | Qt::AlignVCenter,
     QString::number(this->StartTime, this->TimeNotation.toLatin1(), this->TimePrecision));
@@ -367,6 +372,7 @@ void pqAnimationModel::drawForeground(QPainter* painter, const QRectF&)
   painter->drawText(QRectF(labelRect.right() - w / 2.0, labelRect.top(), w / 2.0, rh),
     Qt::AlignRight | Qt::AlignVCenter,
     QString::number(this->EndTime, this->TimeNotation.toLatin1(), this->TimePrecision));
+  painter->restore();
 
   // if sequence, draw a tick mark for each frame
   if ((this->mode() == Sequence || this->mode() == Custom) && this->currentTicks() > 2)
@@ -384,7 +390,7 @@ void pqAnimationModel::drawForeground(QPainter* painter, const QRectF&)
   QPen pen = painter->pen();
   pen.setJoinStyle(Qt::MiterJoin);
   painter->setPen(pen);
-  painter->setBrush(QColor(0, 0, 0));
+  painter->setBrush(this->palette().text());
 
   QPolygonF poly = this->timeBarPoly(this->CurrentTime);
   painter->drawPolygon(poly);
@@ -397,7 +403,7 @@ void pqAnimationModel::drawForeground(QPainter* painter, const QRectF&)
     pts.append(QPointF(pos - 1, sr.height() + sr.top() - 2));
     pts.append(QPointF(pos + 1, sr.height() + sr.top() - 2));
     pts.append(QPointF(pos + 1, rh - 1));
-    painter->setBrush(QColor(200, 200, 200));
+    painter->setBrush(this->palette().alternateBase());
     painter->drawPolygon(QPolygonF(pts));
   }
 
@@ -488,7 +494,7 @@ void pqAnimationModel::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* mouseEven
     pqAnimationTrack* t = hitTestTracks(pos);
     if (t)
     {
-      emit trackSelected(t);
+      Q_EMIT trackSelected(t);
       return;
     }
   }
@@ -667,14 +673,14 @@ void pqAnimationModel::mouseReleaseEvent(QGraphicsSceneMouseEvent*)
   if (this->CurrentTimeGrabbed)
   {
     this->CurrentTimeGrabbed = false;
-    emit this->currentTimeSet(this->NewCurrentTime);
+    Q_EMIT this->currentTimeSet(this->NewCurrentTime);
     this->NewCurrentTime = this->CurrentTime;
     this->update();
   }
 
   if (this->CurrentKeyFrameGrabbed)
   {
-    emit this->keyFrameTimeChanged(this->CurrentTrackGrabbed, this->CurrentKeyFrameGrabbed,
+    Q_EMIT this->keyFrameTimeChanged(this->CurrentTrackGrabbed, this->CurrentKeyFrameGrabbed,
       this->CurrentKeyFrameEdge, this->NewCurrentTime);
 
     this->CurrentTrackGrabbed = NULL;

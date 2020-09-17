@@ -66,9 +66,7 @@ pqFileNamePropertyWidget::pqFileNamePropertyWidget(
   }
 
   // find the domain
-  vtkSmartPointer<vtkSMInputFileNameDomain> domain =
-    vtkSMInputFileNameDomain::SafeDownCast(svp->FindDomain("vtkSMInputFileNameDomain"));
-
+  vtkSmartPointer<vtkSMInputFileNameDomain> domain = svp->FindDomain<vtkSMInputFileNameDomain>();
   if (!domain)
   {
     domain = vtkSmartPointer<vtkSMInputFileNameDomain>::New();
@@ -86,19 +84,12 @@ pqFileNamePropertyWidget::pqFileNamePropertyWidget(
 
   layoutLocal->addWidget(lineEdit);
 
-  PV_DEBUG_PANELS() << "LineEdit for a "
-                    << "StringVectorProperty with a InputFileNameDomain ("
-                    << pqPropertyWidget::getXMLName(vtkSMInputFileNameDomain::SafeDownCast(domain))
-                    << ") ";
-
-  PV_DEBUG_PANELS() << "Adding \"Reset\" button since the domain is dynamically allocated";
-
   // add a "reset" button.
   pqHighlightableToolButton* resetButton = new pqHighlightableToolButton(this);
   resetButton->setObjectName("Reset");
   QAction* resetActn = new QAction(resetButton);
   resetActn->setToolTip("Reset using current data values");
-  resetActn->setIcon(resetButton->style()->standardIcon(QStyle::SP_BrowserReload));
+  resetActn->setIcon(QIcon(":/pqWidgets/Icons/pqReset.svg"));
   resetButton->addAction(resetActn);
   resetButton->setDefaultAction(resetActn);
 
@@ -131,8 +122,7 @@ void pqFileNamePropertyWidget::resetButtonClicked()
   vtkSMProperty* smproperty = this->property();
 
   const char* fileName = "";
-  if (vtkSMInputFileNameDomain* domain =
-        vtkSMInputFileNameDomain::SafeDownCast(smproperty->GetDomain("filename")))
+  if (auto domain = smproperty->FindDomain<vtkSMInputFileNameDomain>())
   {
     if (domain->GetFileName() != "")
     {
@@ -144,8 +134,8 @@ void pqFileNamePropertyWidget::resetButtonClicked()
   if (strcmp(helper.GetAsString(), fileName))
   {
     vtkSMUncheckedPropertyHelper(smproxy, "FileName").Set(fileName);
-    emit this->changeAvailable();
-    emit this->changeFinished();
+    Q_EMIT this->changeAvailable();
+    Q_EMIT this->changeFinished();
     return;
   }
 }

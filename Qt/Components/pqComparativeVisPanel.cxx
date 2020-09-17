@@ -68,6 +68,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqUndoStack.h"
 #include "pqView.h"
 
+#include <cassert>
+
 class pqComparativeVisPanel::pqInternal : public Ui::pqComparativeVisPanel
 {
 public:
@@ -208,13 +210,8 @@ pqComparativeVisPanel::pqComparativeVisPanel(QWidget* p)
 
   this->Internal = new pqInternal();
   this->Internal->setupUi(this);
-#if QT_VERSION >= 0x050000
   this->Internal->activeParameters->horizontalHeader()->setSectionResizeMode(
     QHeaderView::ResizeToContents);
-#else
-  this->Internal->activeParameters->horizontalHeader()->setResizeMode(
-    QHeaderView::ResizeToContents);
-#endif
 
   QObject::connect(
     &pqActiveObjects::instance(), SIGNAL(viewChanged(pqView*)), this, SLOT(setView(pqView*)));
@@ -333,7 +330,7 @@ void pqComparativeVisPanel::updateParametersList()
     this->Internal->activeParameters->setItem(static_cast<int>(cc), 0, item);
 
     QTableWidgetItem* headerItem =
-      new QTableWidgetItem(QIcon(":/QtWidgets/Icons/pqDelete16.png"), "");
+      new QTableWidgetItem(QIcon(":/QtWidgets/Icons/pqDelete.svg"), "");
     this->Internal->activeParameters->setVerticalHeaderItem(static_cast<int>(cc), headerItem);
   }
 
@@ -443,7 +440,7 @@ void pqComparativeVisPanel::removeParameter(int index)
   }
 
   QTableWidgetItem* item = this->Internal->activeParameters->item(index, 0);
-  Q_ASSERT(item);
+  assert(item);
 
   BEGIN_UNDO_SET("Remove Parameter");
 

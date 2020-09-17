@@ -63,6 +63,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QSet>
 #include <QtDebug>
 
+#include <cassert>
+
 class pqApplyBehavior::pqInternals
 {
 public:
@@ -85,7 +87,7 @@ pqApplyBehavior::~pqApplyBehavior()
 //-----------------------------------------------------------------------------
 void pqApplyBehavior::registerPanel(pqPropertiesPanel* panel)
 {
-  Q_ASSERT(panel);
+  assert(panel);
 
   this->connect(panel, SIGNAL(applied(pqProxy*)), SLOT(onApplied(pqProxy*)));
   this->connect(panel, SIGNAL(applied()), SLOT(onApplied()));
@@ -94,7 +96,7 @@ void pqApplyBehavior::registerPanel(pqPropertiesPanel* panel)
 //-----------------------------------------------------------------------------
 void pqApplyBehavior::unregisterPanel(pqPropertiesPanel* panel)
 {
-  Q_ASSERT(panel);
+  assert(panel);
   this->disconnect(panel);
 }
 
@@ -121,38 +123,34 @@ void pqApplyBehavior::onApplied()
 //-----------------------------------------------------------------------------
 void pqApplyBehavior::applied(pqPropertiesPanel*, pqProxy* pqproxy)
 {
-  pqPipelineSource* pqsource = qobject_cast<pqPipelineSource*>(pqproxy);
-  if (pqsource == NULL)
+  if (pqproxy->modifiedState() == pqProxy::UNINITIALIZED)
   {
-    return;
-  }
-
-  Q_ASSERT(pqsource);
-
-  if (pqsource->modifiedState() == pqProxy::UNINITIALIZED)
-  {
-    // if this is first apply after creation, show the data in the view.
-    this->showData(pqsource, pqActiveObjects::instance().activeView());
+    if (auto pqsource = qobject_cast<pqPipelineSource*>(pqproxy))
+    {
+      // if this is first apply after creation, show the data in the view.
+      this->showData(pqsource, pqActiveObjects::instance().activeView());
+    }
 
     // add undo-element to ensure this state change happens when
     // undoing/redoing.
     pqProxyModifiedStateUndoElement* undoElement = pqProxyModifiedStateUndoElement::New();
-    undoElement->SetSession(pqsource->getServer()->session());
-    undoElement->MadeUnmodified(pqsource);
+    undoElement->SetSession(pqproxy->getServer()->session());
+    undoElement->MadeUnmodified(pqproxy);
     ADD_UNDO_ELEM(undoElement);
     undoElement->Delete();
   }
-  pqsource->setModifiedState(pqProxy::UNMODIFIED);
+  pqproxy->setModifiedState(pqProxy::UNMODIFIED);
 
   // Make sure filters menu enable state is updated
-  emit pqApplicationCore::instance()->forceFilterMenuRefresh();
+  Q_EMIT pqApplicationCore::instance()->forceFilterMenuRefresh();
 
-  pqPipelineFilter* pqfilter = qobject_cast<pqPipelineFilter*>(pqproxy);
-  if (!pqfilter)
+  auto pqfilter = qobject_cast<pqPipelineFilter*>(pqproxy);
+  auto pqsource = qobject_cast<pqPipelineSource*>(pqproxy);
+  if (pqsource != nullptr && pqfilter == nullptr)
   {
     // if we have a dataset from a source that has a Catalyst channel name we now rename
     // the proxy to be the channel name if the user didn't modify the name already
-    if (pqsource->userModifiedSMName() == false)
+    if (pqproxy->userModifiedSMName() == false)
     {
       vtkSMSourceProxy* proxy = pqsource->getSourceProxy();
 
@@ -165,7 +163,7 @@ void pqApplyBehavior::applied(pqPropertiesPanel*, pqProxy* pqproxy)
       std::string name = information->GetChannelName();
       if (!name.empty())
       {
-        pqsource->rename(name.c_str());
+        pqproxy->rename(name.c_str());
       }
     }
   }
@@ -278,6 +276,10 @@ void pqApplyBehavior::showData(pqPipelineSource* source, pqView* view)
 
   vtkSMViewProxy* currentViewProxy = view ? view->getViewProxy() : NULL;
 
+  const auto& activeObjects = pqActiveObjects::instance();
+  auto activeLayout = activeObjects.activeLayout();
+  const auto location = activeObjects.activeLayoutLocation();
+
   QSet<vtkSMProxy*> updated_views;
 
   // create representations for all output ports.
@@ -289,12 +291,16 @@ void pqApplyBehavior::showData(pqPipelineSource* source, pqView* view)
     {
       continue;
     }
-
+    // if new view was created, let's make sure it is assigned to a layout.
+    controller->AssignViewToLayout(preferredView, activeLayout, location);
     updated_views.insert(preferredView);
+
+    // if active layout changed, let's use that from this point on.
+    activeLayout = activeObjects.activeLayout();
 
     // reset camera if this is the only visible dataset.
     pqView* pqPreferredView = smmodel->findItem<pqView*>(preferredView);
-    Q_ASSERT(pqPreferredView);
+    assert(pqPreferredView);
     if (preferredView != currentViewProxy)
     {
       // implying a new view was created, always reset that.
@@ -343,6 +349,13 @@ void pqApplyBehavior::showData(pqPipelineSource* source, pqView* view)
     // pqApplyBehavior::applied().
     this->Internals->NewlyCreatedRepresentations.push_back(
       pqInternals::PairType(reprProxy, preferredView));
+
+    // If the currentViewProxy is undefined, then a new view has been created for
+    // the first output port. Attempt to use it for the remaining output ports.
+    if (currentViewProxy == nullptr)
+    {
+      currentViewProxy = preferredView;
+    }
   }
 }
 

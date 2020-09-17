@@ -34,19 +34,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Qt Includes.
 #include <QCheckBox>
+#include <QClipboard>
 #include <QDebug>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QMenu>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QWidgetAction>
 
 #include "pqDataRepresentation.h"
+#include "pqEventDispatcher.h"
 #include "pqExportReaction.h"
 #include "pqOutputPort.h"
 #include "pqPropertyLinks.h"
 #include "pqSpreadSheetView.h"
 #include "pqSpreadSheetViewModel.h"
+#include "pqSpreadSheetViewWidget.h"
 #include "pqUndoStack.h"
 #include "vtkNew.h"
 #include "vtkSMEnumerationDomain.h"
@@ -59,6 +63,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSpreadSheetView.h"
 
 #include <algorithm>
+#include <cassert>
+#include <memory>
 #include <set>
 
 namespace
@@ -99,9 +105,7 @@ private:
 
 namespace detail
 {
-template <typename CallbackType>
-static QAction* addCheckableAction(
-  QMenu* menu, const QString& text, const bool checked, const CallbackType& f)
+static QCheckBox* addCheckableAction(QMenu* menu, const QString& text, const bool checked)
 {
   QCheckBox* cb = new QCheckBox();
   cb->setObjectName("CheckBox");
@@ -118,17 +122,37 @@ static QAction* addCheckableAction(
   action->setText(text);
   action->setDefaultWidget(widget);
   menu->addAction(action);
-  QObject::connect(cb, &QCheckBox::stateChanged, f);
-  return action;
+  return cb;
+}
+
+static void updateAllCheckState(QCheckBox* allCheckbox, const std::vector<QCheckBox*>& cboxes)
+{
+  size_t checked = 0;
+  for (auto cb : cboxes)
+  {
+    checked += (cb->isChecked() ? 1 : 0);
+  }
+
+  QSignalBlocker sblocker(allCheckbox);
+  if (checked == cboxes.size())
+  {
+    allCheckbox->setCheckState(Qt::Checked);
+    allCheckbox->setTristate(false);
+  }
+  else if (checked == 0)
+  {
+    allCheckbox->setCheckState(Qt::Unchecked);
+    allCheckbox->setTristate(false);
+  }
+  else
+  {
+    allCheckbox->setCheckState(Qt::PartiallyChecked);
+  }
 }
 
 static void populateMenu(pqSpreadSheetView* view, QMenu* menu)
 {
   menu->clear();
-  // we'll add these later.
-  // menu->addAction("Check all");
-  // menu->addAction("Uncheck all");
-  // menu->addSeparator();
 
   // add checkboxes for known columns.
   auto model = view->getViewModel();
@@ -147,10 +171,14 @@ static void populateMenu(pqSpreadSheetView* view, QMenu* menu)
         model->headerData(col, Qt::Horizontal, Qt::DisplayRole).toString().toLatin1().data();
       bool checked =
         model->headerData(col, Qt::Horizontal, pqSpreadSheetViewModel::SectionVisible).toBool();
-      columnLabels.push_back(std::make_pair(label, checked));
-      columnLabelsSet.insert(label);
+      if (columnLabelsSet.insert(label).second == true)
+      {
+        columnLabels.push_back(std::make_pair(label, checked));
+      }
     }
   }
+
+  // add a separator
   columnLabels.push_back(std::make_pair(std::string(), false));
 
   // if there are any columns already hidden that are not already added, we
@@ -160,12 +188,21 @@ static void populateMenu(pqSpreadSheetView* view, QMenu* menu)
   for (unsigned int cc = 0, max = svp->GetNumberOfElements(); cc < max; ++cc)
   {
     auto txt = svp->GetElement(cc);
-    if (columnLabelsSet.find(txt) == columnLabelsSet.end())
+    if (columnLabelsSet.insert(txt).second == true)
     {
       columnLabels.push_back(std::make_pair(txt, false));
-      columnLabelsSet.insert(txt);
     }
   }
+
+  if (columnLabels.size() <= 1) // there's always 1 separator.
+  {
+    // menu is empty.
+    return;
+  }
+
+  auto allCheckbox = addCheckableAction(menu, "All Columns", false);
+  menu->addSeparator();
+  auto checkboxes = std::make_shared<std::vector<QCheckBox*> >();
 
   for (const auto& pair : columnLabels)
   {
@@ -177,8 +214,7 @@ static void populateMenu(pqSpreadSheetView* view, QMenu* menu)
     {
       const std::string& label = pair.first;
       const bool& checked = pair.second;
-
-      auto callback = [view, label](int checkstate) {
+      auto callback = [view, label, checkboxes, allCheckbox](bool is_checked) {
         auto vproxy = view->getViewProxy();
         auto vsvp =
           vtkSMStringVectorProperty::SafeDownCast(vproxy->GetProperty("HiddenColumnLabels"));
@@ -187,12 +223,11 @@ static void populateMenu(pqSpreadSheetView* view, QMenu* menu)
         {
           values.push_back(vsvp->GetElement(cc));
         }
-        if (checkstate == Qt::Checked)
+        if (is_checked)
         {
           values.erase(std::remove(values.begin(), values.end(), label), values.end());
         }
-        else if (checkstate == Qt::Unchecked &&
-          std::find(values.begin(), values.end(), label) == values.end())
+        else if (std::find(values.begin(), values.end(), label) == values.end())
         {
           values.push_back(label);
         }
@@ -202,10 +237,44 @@ static void populateMenu(pqSpreadSheetView* view, QMenu* menu)
         vsvp->SetElements(values);
         vproxy->UpdateVTKObjects();
         view->render();
+
+        updateAllCheckState(allCheckbox, (*checkboxes.get()));
       };
-      addCheckableAction(menu, label.c_str(), checked, callback);
+
+      auto cb = addCheckableAction(menu, label.c_str(), checked);
+      QObject::connect(cb, &QCheckBox::toggled, callback);
+      checkboxes->push_back(cb);
     }
   }
+
+  updateAllCheckState(allCheckbox, (*checkboxes.get()));
+  QObject::connect(allCheckbox, &QCheckBox::stateChanged, [view, checkboxes, allCheckbox](
+                                                            int checkState) {
+    std::vector<std::string> hidden_columns;
+    for (auto cb : (*checkboxes))
+    {
+      QSignalBlocker sblocker(cb);
+      cb->setChecked(checkState == Qt::Checked);
+      if (checkState != Qt::Checked)
+      {
+        // all columns are hidden.
+        hidden_columns.push_back(cb->text().toLocal8Bit().data());
+      }
+    }
+
+    // turn off tristate to avoid the `All Columns` checkbox from entering the
+    // partially-checked state through user clicks.
+    allCheckbox->setTristate(false);
+
+    auto vproxy = view->getViewProxy();
+    auto vsvp = vtkSMStringVectorProperty::SafeDownCast(vproxy->GetProperty("HiddenColumnLabels"));
+
+    SM_SCOPED_TRACE(PropertiesModified).arg("proxy", vproxy);
+    SCOPED_UNDO_SET("SpreadSheetView column visibilities");
+    vsvp->SetElements(hidden_columns);
+    vproxy->UpdateVTKObjects();
+    view->render();
+  });
 }
 }
 
@@ -292,6 +361,12 @@ pqSpreadSheetViewDecorator::pqSpreadSheetViewDecorator(pqSpreadSheetView* view)
 
   // get the actual repr currently shown by the view.
   this->showing(this->Spreadsheet->activeRepresentation());
+
+  // install event filter from the main widget of the spreadsheet to catch the shortcut
+  if (view->widget()->parentWidget() && view->widget()->parentWidget()->parentWidget())
+  {
+    view->widget()->parentWidget()->parentWidget()->installEventFilter(this);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -388,7 +463,7 @@ void pqSpreadSheetViewDecorator::currentIndexChanged(pqOutputPort* port)
   {
     if (auto activeRepr = this->Spreadsheet->activeRepresentation())
     {
-      Q_ASSERT(activeRepr->isVisible());
+      assert(activeRepr->isVisible());
       auto inputPort = activeRepr->getOutputPortFromInput();
       vtkNew<vtkSMParaViewPipelineControllerWithRendering> controller;
       controller->Hide(
@@ -422,4 +497,34 @@ void pqSpreadSheetViewDecorator::setAllowChangeOfSource(bool val)
   this->Internal->Source->setEnabled(val);
   this->Internal->Source->setVisible(val);
   this->Internal->label->setVisible(val);
+}
+
+//-----------------------------------------------------------------------------
+bool pqSpreadSheetViewDecorator::eventFilter(QObject* object, QEvent* e)
+{
+  if (e->type() == QEvent::KeyPress)
+  {
+    auto kev = static_cast<QKeyEvent*>(e);
+    if (kev->matches(QKeySequence::Copy))
+    {
+      this->copyToClipboard();
+      return true;
+    }
+  }
+
+  return Superclass::eventFilter(object, e);
+}
+
+//-----------------------------------------------------------------------------
+void pqSpreadSheetViewDecorator::copyToClipboard()
+{
+  bool wasChecked = this->Internal->SelectionOnly->isChecked();
+  this->Internal->SelectionOnly->setChecked(true);
+
+  pqEventDispatcher::processEventsAndWait(100);
+  auto table = this->Spreadsheet->getViewModel()->GetRowsAsString();
+
+  QApplication::clipboard()->setText(table);
+
+  this->Internal->SelectionOnly->setChecked(wasChecked);
 }

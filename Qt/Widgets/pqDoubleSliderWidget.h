@@ -19,8 +19,8 @@
 #include "pqWidgetsModule.h"
 #include <QWidget>
 
-class QSlider;
 class QDoubleValidator;
+class QSlider;
 
 /**
  * A widget with a tied slider and line edit for editing a double property
@@ -31,9 +31,8 @@ class PQWIDGETS_EXPORT pqDoubleSliderWidget : public QWidget
   Q_PROPERTY(double value READ value WRITE setValue USER true)
   Q_PROPERTY(pqDoubleLineEdit::RealNumberNotation notation READ notation WRITE setNotation)
   Q_PROPERTY(int precision READ precision WRITE setPrecision)
-  Q_PROPERTY(bool widgetSettingsApplicationManaged READ widgetSettingsApplicationManaged WRITE
-      setWidgetSettingsApplicationManaged)
-
+  Q_PROPERTY(bool useGlobalPrecisionAndNotation READ useGlobalPrecisionAndNotation WRITE
+      setUseGlobalPrecisionAndNotation)
 public:
   pqDoubleSliderWidget(QWidget* parent = NULL);
   ~pqDoubleSliderWidget();
@@ -56,13 +55,13 @@ public:
   int precision() const;
 
   /**
-   * Return if the widget settings are expected to be managed by the application.
-   * True by default.
-   * \sa setWidgetSettingsApplicationManaged()
+   * `useGlobalPrecisionAndNotation` indicates if the pqDoubleLineEdit used by
+   * this widget should use global precision and notation values instead of
+   * the parameters specified on this instance.
    */
-  bool widgetSettingsApplicationManaged() const;
+  bool useGlobalPrecisionAndNotation() const;
 
-signals:
+Q_SIGNALS:
   /**
    * signal the value changed
    */
@@ -76,7 +75,7 @@ signals:
    */
   void valueEdited(double);
 
-public slots:
+public Q_SLOTS:
   /**
    * set the value
    */
@@ -95,10 +94,10 @@ public slots:
   void setPrecision(int precision);
 
   /**
-   * Set if widget settings are expected to be managed by the application.
-   * \sa widgetSettingsApplicationManaged()
+   * Set whether to use global precision and notation values.
+   * @sa useGlobalPrecisionAndNotation()
    */
-  void setWidgetSettingsApplicationManaged(bool value);
+  void setUseGlobalPrecisionAndNotation(bool value);
 
 protected:
   virtual int valueToSliderPos(double val);
@@ -108,7 +107,7 @@ protected:
   void setSliderRange(int min, int max);
   void updateSlider();
 
-private slots:
+private Q_SLOTS:
   void sliderChanged(int val);
   void textChanged(const QString& text);
   void editingFinished();

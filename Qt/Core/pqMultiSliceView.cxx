@@ -37,6 +37,8 @@
 #include "vtkSMRepresentationProxy.h"
 #include "vtkView.h"
 
+#include <cassert>
+
 #define MULTI_SLICE_AXIS_THICKNESS 80
 #define MULTI_SLICE_AXIS_ACTIVE_SIZE 20
 #define MULTI_SLICE_AXIS_EDGE_MARGIN 10
@@ -143,7 +145,7 @@ QWidget* pqMultiSliceView::createWidget()
   vtkSMRenderViewProxy* renModule = this->getRenderViewProxy();
   if (this->InternalWidget && renModule)
   {
-    this->InternalWidget->SetRenderWindow(renModule->GetRenderWindow());
+    this->InternalWidget->setRenderWindow(renModule->GetRenderWindow());
   }
 
   for (int cc = 0; cc < 3; cc++)
@@ -168,7 +170,7 @@ void pqMultiSliceView::updateAxisBounds()
 {
   double bounds[6];
   vtkSMMultiSliceViewProxy* viewPxy = vtkSMMultiSliceViewProxy::SafeDownCast(this->getProxy());
-  Q_ASSERT(viewPxy);
+  assert(viewPxy);
 
   viewPxy->GetDataBounds(bounds);
   if (vtkMath::AreBoundsInitialized(bounds))
@@ -235,11 +237,11 @@ void pqMultiSliceView::onSliceAdded(int activeSliceIndex)
   QObject* aSender = this->sender();
   int axisIndex = this->getAxisIndex(aSender);
 
-  Q_ASSERT(axisIndex >= 0 && axisIndex <= 2);
+  assert(axisIndex >= 0 && axisIndex <= 2);
   this->updateSlices();
 
   // Notify that the slices location have changed
-  emit sliceAdded(axisIndex, activeSliceIndex);
+  Q_EMIT sliceAdded(axisIndex, activeSliceIndex);
 }
 
 //-----------------------------------------------------------------------------
@@ -247,11 +249,11 @@ void pqMultiSliceView::onSliceRemoved(int activeSliceIndex)
 {
   QObject* aSender = this->sender();
   int axisIndex = this->getAxisIndex(aSender);
-  Q_ASSERT(axisIndex >= 0 && axisIndex <= 2);
+  assert(axisIndex >= 0 && axisIndex <= 2);
   this->updateSlices();
 
   // Notify that the slices location have changed
-  emit sliceRemoved(axisIndex, activeSliceIndex);
+  Q_EMIT sliceRemoved(axisIndex, activeSliceIndex);
 }
 
 //-----------------------------------------------------------------------------
@@ -259,11 +261,11 @@ void pqMultiSliceView::onSliceModified(int activeSliceIndex)
 {
   QObject* aSender = this->sender();
   int axisIndex = this->getAxisIndex(aSender);
-  Q_ASSERT(axisIndex >= 0 && axisIndex <= 2);
+  assert(axisIndex >= 0 && axisIndex <= 2);
   this->updateSlices();
 
   // Notify that the slices location have changed
-  emit sliceModified(axisIndex, activeSliceIndex);
+  Q_EMIT sliceModified(axisIndex, activeSliceIndex);
 }
 
 //-----------------------------------------------------------------------------
@@ -396,15 +398,15 @@ void pqMultiSliceView::onSliceClicked(int button, int modifier, double value)
   QObject* senderObject = QObject::sender();
   if (senderObject == this->AxisX.data())
   {
-    emit sliceClicked(0, value, button, modifier);
+    Q_EMIT sliceClicked(0, value, button, modifier);
   }
   else if (senderObject == this->AxisY.data())
   {
-    emit sliceClicked(1, value, button, modifier);
+    Q_EMIT sliceClicked(1, value, button, modifier);
   }
   else if (senderObject == this->AxisZ.data())
   {
-    emit sliceClicked(2, value, button, modifier);
+    Q_EMIT sliceClicked(2, value, button, modifier);
   }
 }
 //-----------------------------------------------------------------------------

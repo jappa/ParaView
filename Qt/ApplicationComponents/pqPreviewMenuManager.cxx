@@ -49,6 +49,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QRegExp>
 #include <QStringList>
 
+#include <cassert>
+
 #define SETUP_ACTION(actn)                                                                         \
   if (QAction* tmp = actn)                                                                         \
   {                                                                                                \
@@ -91,7 +93,8 @@ pqPreviewMenuManager::pqPreviewMenuManager(QMenu* menu)
   , FirstCustomAction(nullptr)
 {
   QStringList defaultItems;
-  defaultItems << "1280 x 800 (WXGA)"
+  defaultItems << "1280 x 720 (HD)"
+               << "1280 x 800 (WXGA)"
                << "1280 x 1024 (SXGA)"
                << "1600 x 900 (HD+)"
                << "1920 x 1080 (FHD)"
@@ -120,8 +123,11 @@ void pqPreviewMenuManager::init(const QStringList& defaultItems, QMenu* menu)
     menu->addSeparator();
   }
   menu->addAction("Custom ...", this, SLOT(addCustom()));
-  this->connect(
-    &pqActiveObjects::instance(), SIGNAL(viewChanged(pqView*)), SLOT(updateEnabledState()));
+
+  this->Timer.setSingleShot(true);
+  this->Timer.setInterval(500);
+  this->Timer.connect(&pqActiveObjects::instance(), SIGNAL(viewChanged(pqView*)), SLOT(start()));
+  this->connect(&this->Timer, SIGNAL(timeout()), SLOT(updateEnabledState()));
   this->updateEnabledState();
 }
 
@@ -286,10 +292,10 @@ void pqPreviewMenuManager::lockResolution(int dx, int dy, QAction* target)
   Q_UNUSED(target);
 
   SCOPED_UNDO_SET("Enter Preview mode");
-  Q_ASSERT(dx >= 1 && dy >= 1);
+  assert(dx >= 1 && dy >= 1);
   pqTabbedMultiViewWidget* viewManager = qobject_cast<pqTabbedMultiViewWidget*>(
     pqApplicationCore::instance()->manager("MULTIVIEW_WIDGET"));
-  Q_ASSERT(viewManager);
+  assert(viewManager);
 
   const QSize requestedSize(dx, dy);
   const QSize previewSize = viewManager->preview(requestedSize);
@@ -309,7 +315,7 @@ void pqPreviewMenuManager::unlock()
   SCOPED_UNDO_SET("Exit Preview mode");
   pqTabbedMultiViewWidget* viewManager = qobject_cast<pqTabbedMultiViewWidget*>(
     pqApplicationCore::instance()->manager("MULTIVIEW_WIDGET"));
-  Q_ASSERT(viewManager);
+  assert(viewManager);
   viewManager->preview(QSize());
 }
 
@@ -319,7 +325,7 @@ void pqPreviewMenuManager::aboutToShow()
   this->updateCustomActions();
 
   auto layout = pqActiveObjects::instance().activeLayout();
-  Q_ASSERT(layout != nullptr);
+  assert(layout != nullptr);
   int resolution[2];
   vtkSMPropertyHelper(layout, "PreviewMode").Get(resolution, 2);
 

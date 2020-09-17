@@ -44,7 +44,11 @@ import paraview._backwardscompatibilityhelper
 # Bring OutputPort in our namespace.
 from paraview.servermanager import OutputPort
 
+# Bring in selection
+from .selection import *
+
 import sys
+import warnings
 
 if sys.version_info >= (3,):
     xrange = range
@@ -135,11 +139,16 @@ def SetActiveConnection(connection=None, ns=None):
 #==============================================================================
 # Views and Layout methods
 #==============================================================================
-def CreateView(view_xml_name, detachedFromLayout=False, **params):
+def CreateView(view_xml_name, detachedFromLayout=None, **params):
     """Creates and returns the specified proxy view based on its name/label.
-    If detachedFromLayout is true, the view will no be grabbed by the layout
-    hence not visible unless it is attached after. This also set params keywords
-    arguments as view properties."""
+    Also set params keywords arguments as view properties.
+
+    `detachedFromLayout` has been deprecated in ParaView 5.7 as it is no longer
+    needed. All views are created detached by default.
+    """
+    if detachedFromLayout is not None:
+        warnings.warn("`detachedFromLayout` is deprecated in ParaView 5.7", DeprecationWarning)
+
     view = servermanager._create_view(view_xml_name)
     if not view:
         raise RuntimeError ("Failed to create requested view", view_xml_name)
@@ -158,9 +167,12 @@ def CreateView(view_xml_name, detachedFromLayout=False, **params):
     controller.PreInitializeProxy(view)
     SetProperties(view, **params)
     controller.PostInitializeProxy(view)
-    if detachedFromLayout:
-      view.SMProxy.SetAnnotation("ParaView::DetachedFromLayout", "true")
     controller.RegisterViewProxy(view, registrationName)
+
+    if paraview.compatibility.GetVersion() <= 5.6:
+        # older versions automatically assigned view to a
+        # layout.
+        controller.AssignViewToLayout(view)
 
     # setup an interactor if current process support interaction if an
     # interactor hasn't already been set. This overcomes the problem where VTK
@@ -337,6 +349,21 @@ def ResetCamera(view=None):
 
 # -----------------------------------------------------------------------------
 
+def ResetCameraToDirection(position, direction, up=None, view=None):
+    """Resets the settings of the camera to the given position and direction"""
+    if not view:
+        view = active_objects.view
+    if hasattr(view, "CameraFocalPoint"):
+        view.CameraFocalPoint = position
+    if hasattr(view, "CameraPosition"):
+        for i in range(3):
+            view.CameraPosition[i] = position[i] - direction[i]
+    if hasattr(view, "CameraViewUp") and up:
+        view.CameraViewUp = up
+    ResetCamera(view)
+
+# -----------------------------------------------------------------------------
+
 def CreateLayout(name=None):
     """Create a new layout with no active view."""
     layout = servermanager.misc.ViewLayout(registrationGroup="layouts")
@@ -376,11 +403,8 @@ def GetLayout(view=None):
         view = GetActiveView()
     if not view:
         raise RuntimeError ("No active view was found.")
-    layouts = GetLayouts()
-    for layout in layouts.values():
-        if layout.GetViewLocation(view) != -1:
-            return layout
-    return None
+    lproxy = servermanager.vtkSMViewLayoutProxy.FindLayout(view.SMProxy)
+    return servermanager._getPyProxy(lproxy)
 
 def GetLayoutByName(name):
     """Return the first layout with the given name, if any."""
@@ -399,6 +423,22 @@ def GetViewsInLayout(layout=None):
     views = GetViews()
     return [x for x in views if layout.GetViewLocation(x) != -1]
 
+def AssignViewToLayout(view=None, layout=None, hint=0):
+    """Assigns the view provided (or active view if None) to the
+    layout provided. If layout is None, then either the active layout or an
+    existing layout on the same server will be used. If no layout exists, then
+    a new layout will be created. Returns True on success.
+
+    It is an error to assign the same view to multiple layouts.
+    """
+    view = view if view else GetActiveView()
+    if not view:
+        raise RuntimeError("No active view was found.")
+
+    layout = layout if layout else GetLayout()
+    controller = servermanager.ParaViewPipelineController()
+    return controller.AssignViewToLayout(view, layout, hint)
+
 # -----------------------------------------------------------------------------
 
 def RemoveViewsAndLayouts():
@@ -414,6 +454,109 @@ def RemoveViewsAndLayouts():
         pxm.UnRegisterProxy('layouts', name, layouts[(name, id)])
 
 #==============================================================================
+# Extracts and Extract Generators
+#==============================================================================
+def CreateExtractGenerator(name, proxy=None, registrationName=None):
+    """
+    Creates a new extract generator and returns it.
+
+    :param name: The type of the extract generator to create.
+    :type name: `str`
+    :param proxy: The proxy to generate the extract from. If not specified
+    `GetActiveSource()` is used.
+    :type proxy: :class:`paraview.servermanager.Proxy`, optional
+    :param registrationName: The registration name to use to register
+    the generator with the ProxyManager. If not specified a unique name
+    will be generated.
+    :type name: `str`, optional
+
+    :return: The extract generator created, on success, else None
+    :rtype: :class:`paraview.servermanager.Proxy` or `None`
+    """
+    if proxy is None:
+        proxy = GetActiveSource()
+    if not proxy:
+        raise RuntimeError("Could determine input for extract generator")
+
+    if proxy.Port > 0:
+        rawProxy = proxy.SMProxy.GetOutputPort(proxy.Port)
+    else:
+        rawProxy = proxy.SMProxy
+
+    controller = servermanager.vtkSMExtractsController()
+    rawGenerator = controller.CreateExtractGenerator(rawProxy, name, registrationName)
+    generator = servermanager._getPyProxy(rawGenerator)
+
+    from .catalyst.detail import IsInsitu, RegisterExtractGenerator
+    if IsInsitu():
+        # tag the extract generator to know which pipeline this came from.
+        RegisterExtractGenerator(generator)
+    return generator
+
+
+def GetExtractGenerators(proxy=None):
+    """
+    Returns a list of extract generators associated with the proxy.
+
+    :param proxy: The proxy to return the extract generators associated with.
+    If not specified (or is None) then all extract generators are returned.
+    :type proxy: :class:`paraview.servermanager.Proxy`, optional
+
+    :return: List of associated extract generators if any. May return an empty
+    list.
+    :rtype: list of :class:`paraview.servermanager.Proxy`
+    """
+    controller = servermanager.vtkSMExtractsController()
+    pxm = servermanager.ProxyManager()
+    generators = pxm.GetProxiesInGroup("extract_generators").values()
+    if proxy is None:
+        return list(generators)
+    else:
+        return [g for g in generators if controller.IsExtractGenerator(g.SMProxy, proxy.SMProxy)]
+
+def FindExtractGenerator(registrationName):
+    """
+    Returns an extract generator with a specific registrationName.
+
+    :param registrationName: Registration name for the extract generator.
+    :type registrationName: `str`
+
+    :return: The extract generator or None
+    :rtype: :class:`paraview.servermanager.Proxy` or `None`
+    """
+    pxm = servermanager.ProxyManager()
+    return pxm.GetProxy("extract_generators", registrationName)
+
+def SaveExtractsUsingCatalystOptions(options):
+    """
+    Generates extracts using a CatalystOptions object. This is intended for use
+    when a Catalyst analysis script is being run in batch.
+    """
+    # handle the case where options is CatalystOptions
+    return SaveExtracts(ExtractsOutputDirectory = options.ExtractsOutputDirectory,
+                        GenerateCinemaSpecification = options.GenerateCinemaSpecification)
+
+def SaveExtracts(**kwargs):
+    """
+    Generate extracts. Parameters are forwarded for 'SaveAnimationExtracts'
+    Currently, supported keyword parameters are:
+
+    :param ExtractsOutputDirectory: root directory for extracts
+    :type ExtractsOutputDirectory: `str`
+    """
+    # currently, Python state files don't have anything about animation,
+    # however, we rely on animation to generate the extracts, so we ensure
+    # that the animation is updated based on timesteps in data by explicitly
+    # calling UpdateAnimationUsingDataTimeSteps.
+    scene = GetAnimationScene()
+    scene.UpdateAnimationUsingDataTimeSteps()
+
+    pxm = servermanager.ProxyManager()
+    proxy = servermanager._getPyProxy(pxm.NewProxy("misc", "SaveAnimationExtracts"))
+    SetProperties(proxy, **kwargs)
+    return proxy.SaveExtracts()
+
+#==============================================================================
 # XML State management
 #==============================================================================
 
@@ -421,14 +564,20 @@ def LoadState(filename, connection=None, **extraArgs):
     RemoveViewsAndLayouts()
 
     pxm = servermanager.ProxyManager()
-    proxy = pxm.NewProxy('options', 'LoadStateOptions')
+    smproxy = pxm.SMProxyManager.NewProxy('options', 'LoadStateOptions')
+    smproxy.UnRegister(None)
 
-    if ((proxy is not None) & proxy.PrepareToLoad(filename)):
-        if (proxy.HasDataFiles() and (extraArgs is not None)):
-            pyproxy = servermanager._getPyProxy(proxy)
+    if (smproxy is not None) and smproxy.PrepareToLoad(filename):
+        if smproxy.HasDataFiles() and (extraArgs is not None):
+            # always create a brand new class since the properties
+            # may change based on the state file being loaded.
+            customclass = servermanager._createClass(smproxy.GetXMLGroup(),
+                    smproxy.GetXMLName(), prototype=smproxy)
+            pyproxy = customclass(proxy=smproxy)
             SetProperties(pyproxy, **extraArgs)
-
-        proxy.Load()
+            del pyproxy
+            del customclass
+        smproxy.Load()
 
     # Try to set the new view active
     if len(GetRenderViews()) > 0:
@@ -467,19 +616,21 @@ def GetDisplayProperties(proxy=None, view=None):
     return GetRepresentation(proxy, view)
 
 # -----------------------------------------------------------------------------
-def Show(proxy=None, view=None, **params):
+def Show(proxy=None, view=None, representationType=None, **params):
     """Turns the visibility of a given pipeline object on in the given view.
     If pipeline object and/or view are not specified, active objects are used."""
     if proxy == None:
         proxy = GetActiveSource()
+    if not hasattr(proxy, "GetNumberOfOutputPorts") or proxy.GetNumberOfOutputPorts() == 0:
+        raise RuntimeError('Cannot show a sink i.e. algorithm with no output.')
     if proxy == None:
         raise RuntimeError ("Show() needs a proxy argument or that an active source is set.")
     if not view:
-        # it here's now active view, controller.Show() will create a new preferred view.
+        # If there's no active view, controller.Show() will create a new preferred view.
         # if possible.
         view = active_objects.view
     controller = servermanager.ParaViewPipelineController()
-    rep = controller.Show(proxy, proxy.Port, view)
+    rep = controller.Show(proxy, proxy.Port, view, representationType)
     if rep == None:
         raise RuntimeError ("Could not create a representation object for proxy %s" % proxy.GetXMLLabel())
     for param in params.keys():
@@ -604,9 +755,8 @@ def SetProperties(proxy=None, **params):
         proxy = active_objects.source
     properties = proxy.ListProperties()
     for param in params.keys():
-        if param not in properties:
-            raise AttributeError("object has no property %s" % param)
-        proxy.SetPropertyWithName(param, params[param])
+        pyproxy = servermanager._getPyProxy(proxy)
+        pyproxy.__setattr__(param, params[param])
 
 # -----------------------------------------------------------------------------
 
@@ -702,7 +852,7 @@ def LoadPalette(paletteName):
     colors used by ParaView views.  The current global palette's colors are set
     to the colors in the loaded palette."""
     pxm = servermanager.ProxyManager()
-    palette = pxm.GetProxy("global_properties", "ColorPalette")
+    palette = pxm.GetProxy("settings", "ColorPalette")
     prototype = pxm.GetPrototypeProxy("palettes", paletteName)
 
     if palette is None or prototype is None:
@@ -776,10 +926,17 @@ def FindView(name):
 def GetActiveViewOrCreate(viewtype):
     """
     Returns the active view, if the active view is of the given type,
-    otherwise creates a new view of the requested type."""
+    otherwise creates a new view of the requested type.
+    Note, if a new view is created, it will be assigned to a layout
+    by calling `AssignViewToLayout`."""
     view = GetActiveView()
     if view is None or view.GetXMLName() != viewtype:
         view = CreateView(viewtype)
+        if view:
+            # if a new view is created, we assign it to a layout.
+            # Since this method gets used when tracing existing views, it makes
+            # sense to assign it to a layout during playback.
+            AssignViewToLayout(view)
     if not view:
         raise RuntimeError ("Failed to create/locate the specified view")
     return view
@@ -787,10 +944,17 @@ def GetActiveViewOrCreate(viewtype):
 def FindViewOrCreate(name, viewtype):
     """
     Returns the view, if a view with the given name exists and is of the
-    the given type, otherwise creates a new view of the requested type."""
+    the given type, otherwise creates a new view of the requested type.
+    Note, if a new view is created, it will be assigned to a layout
+    by calling `AssignViewToLayout`."""
     view = FindView(name)
     if view is None or view.GetXMLName() != viewtype:
         view = CreateView(viewtype)
+        if view:
+            # if a new view is created, we assign it to a layout.
+            # Since this method gets used when tracing existing views, it makes
+            # sense to assign it to a layout during playback.
+            AssignViewToLayout(view)
     if not view:
         raise RuntimeError ("Failed to create/locate the specified view")
     return view
@@ -810,6 +974,29 @@ def LocateView(displayProperties=None):
         except AttributeError:
             pass
     return None
+
+def GetSettingsProxy(type):
+    """
+    Given a type as name returns the Proxy for those settings.
+    For example for type=GeneralSettings"""
+    pxm = servermanager.ProxyManager()
+    proxy =  pxm.GetProxy("settings", type)
+    return proxy
+
+def GetAllSettings():
+    """
+    Get a list of Strings, that return valid Proxies using
+    the GetSettingsProxy function"""
+    settingsList = []
+    pxm = simple.servermanager.ProxyManager()
+    pdm = pxm.GetProxyDefinitionManager()
+    iter = pdm.NewSingleGroupIterator("settings")
+    iter.GoToFirstItem()
+
+    while not iter.IsDoneWithTraversal():
+        settingsList.append(iter.GetProxyName())
+        iter.GoToNextItem()
+    return settingsList
 
 # -----------------------------------------------------------------------------
 
@@ -932,19 +1119,13 @@ def ExtendFileSeries(proxy=None):
 
 # -----------------------------------------------------------------------------
 def ImportCinema(filename, view=None):
-    """Import a cinema database. This can potentially create multiple
-    sources/filters for visualizable objects in the Cinema database.
-    Returns True on success. If view is provided, then the cinema sources
-    are shown in that view as indicated in the database.
+    """::deprecated:: 5.9
+
+    Cinema import capabilities are no longer supported in this version.
     """
-    try:
-        from vtkmodules.vtkPVCinemaReader import vtkSMCinemaDatabaseImporter
-    except ImportError:
-        # cinema not supported in current configuration
-        return False
-    session = servermanager.ActiveConnection.Session
-    importer = vtkSMCinemaDatabaseImporter()
-    return importer.ImportCinema(filename, session, view)
+    import warnings
+    warnings.warn("'ImportCinema' is no longer supported", DeprecationWarning)
+    return False
 
 # -----------------------------------------------------------------------------
 def CreateWriter(filename, proxy=None, **extraArgs):
@@ -1304,8 +1485,14 @@ def SaveAnimation(filename, viewOrLayout=None, scene=None, **params):
     formatProperties = formatProxy.ListProperties()
     for prop in formatProperties:
         if prop in params:
-            formatProxy.SetPropertyWithName(prop, params[prop])
-            del params[prop]
+            # see comment at vtkSMSaveAnimationProxy.cxx:327
+            # certain 'prop' (such as FrameRate) are present
+            # in both SaveAnimation and formatProxy (FFMPEG with
+            # panel_visibility="never"). In this case save it only
+            # in SaveAnimation
+            if formatProxy.GetProperty(prop).GetPanelVisibility() != "never":
+                formatProxy.SetPropertyWithName(prop, params[prop])
+                del params[prop]
 
     if "ImageQuality" in params:
         import warnings
@@ -1491,8 +1678,17 @@ def GetOpacityTransferFunction(arrayname, representation=None, separate=False, *
 def ImportPresets(filename):
     """Import presets from a file. The file can be in the legacy color map xml
     format or in the new JSON format. Returns True on success."""
-    presets = servermanager.vtkSMTransferFunctionPresets()
+    presets = servermanager.vtkSMTransferFunctionPresets.GetInstance()
     return presets.ImportPresets(filename)
+
+# -----------------------------------------------------------------------------
+def ExportTransferFunction(colortransferfunction, opacitytransferfunction, tfname, filename):
+    """Export transfer function to a file. The file will be saved in the new JSON format.
+    Note that opacitytransferfunction can be None. The tfname is the name that will be
+    given to the transfer function preset when imported back into ParaView.
+    Returns True on success."""
+    return servermanager.vtkSMTransferFunctionProxy.ExportTransferFunction(\
+             colortransferfunction.SMProxy, opacitytransferfunction.SMProxy, tfname, filename)
 
 # -----------------------------------------------------------------------------
 def CreateLookupTable(**params):
@@ -1520,7 +1716,6 @@ def CreatePiecewiseFunction(**params):
     return pfunc
 
 # -----------------------------------------------------------------------------
-
 def GetLookupTableForArray(arrayname, num_components, **params):
     """Used to get an existing lookuptable for a array or to create one if none
     exists. Keyword arguments can be passed in to initialize the LUT if a new
@@ -1528,46 +1723,68 @@ def GetLookupTableForArray(arrayname, num_components, **params):
     *** DEPRECATED ***: Use GetColorTransferFunction instead"""
     return GetColorTransferFunction(arrayname, **params)
 
-# global lookup table reader instance
-# the user can use the simple api below
-# rather than creating a lut reader themself
-_lutReader = None
-def _GetLUTReaderInstance():
-    """ Internal api. Return the lookup table reader singleton. Create
-    it if needed."""
-    global _lutReader
-    if _lutReader is None:
-      import lookuptable
-      _lutReader = lookuptable.vtkPVLUTReader()
-    return _lutReader
-
 # -----------------------------------------------------------------------------
+def AssignLookupTable(arrayInfo, lutName, rangeOveride=[]):
+    """Assign a lookup table to an array by lookup table name.
 
-def AssignLookupTable(arrayObject, LUTName, rangeOveride=[]):
-    """Assign a lookup table to an array by lookup table name. The array
-    may ber obtained from a ParaView source in it's point or cell data.
-    The lookup tables available in ParaView's GUI are loaded by default.
-    To get a list of the available lookup table names see GetLookupTableNames.
-    To load a custom lookup table see LoadLookupTable."""
-    return _GetLUTReaderInstance().GetLUT(arrayObject, LUTName, rangeOveride)
+    `arrayInfo` is the information object for the array. The array name and its
+    range is determined using the info object provided.
 
-# -----------------------------------------------------------------------------
+    `lutName` is the name for the transfer function preset.
 
-def GetLookupTableNames():
-    """Return a list containing the currently available lookup table names.
-    A name maybe used to assign a lookup table to an array. See
-    AssignLookupTable.
+    `rangeOveride` is provided as the range to use instead of the range of the
+    array determined using the `arrayInfo`.
+
+    Example usage::
+
+      track = GetAnimationTrack("Center", 0, sphere) or
+      arrayInfo = source.PointData["Temperature"]
+      AssignLookupTable(arrayInfo, "Cool to Warm")
+
     """
-    return _GetLUTReaderInstance().GetLUTNames()
+
+    # If the named LUT is not in the presets, see if it was one that was removed and
+    # substitute it with the backwards compatibility helper
+    presets = servermanager.vtkSMTransferFunctionPresets.GetInstance()
+    reverse = False
+    if not presets.HasPreset(lutName):
+        (lutName, reverse) = paraview._backwardscompatibilityhelper.lookupTableUpdate(lutName)
+
+    # If no alternate LUT exists, raise an exception
+    if not presets.HasPreset(lutName):
+        raise RuntimeError("no preset with name `%s` present", lutName)
+
+    # Preset found. Apply it.
+    lut = GetColorTransferFunction(arrayInfo.Name)
+    if not lut.ApplyPreset(lutName):
+        return False
+
+    if rangeOveride:
+        lut.RescaleTransferFunction(rangeOveride)
+
+    # Reverse if necessary for backwards compatibility
+    if reverse:
+        lut.InvertTransferFunction()
+
+    return True
+
+# -----------------------------------------------------------------------------
+def GetLookupTableNames():
+    """Returns a list containing the currently available transfer function
+    presets."""
+    presets = servermanager.vtkSMTransferFunctionPresets.GetInstance()
+    return [presets.GetPresetName(index) for index in range(presets.GetNumberOfPresets())]
 
 # -----------------------------------------------------------------------------
 
 def LoadLookupTable(fileName):
-    """Read the lookup tables in the named file and append them to the
-    global collection of lookup tables. The newly loaded lookup tables
-    may then be used with AssignLookupTable function.
+    """Load transfer function preset from a file.
+    Both JSON (new) and XML (legacy) preset formats are supported.
+    If the filename ends with a .xml, it's assumed to be a legacy color map XML
+    and will be converted to the new format before processing.
     """
-    return _GetLUTReaderInstance().Read(fileName)
+    presets = servermanager.vtkSMTransferFunctionPresets.GetInstance()
+    return presets.ImportPresets(fileName)
 
 # -----------------------------------------------------------------------------
 
@@ -1656,17 +1873,15 @@ def GetAnimationScene():
 
 # -----------------------------------------------------------------------------
 
-def AnimateReader(reader=None, view=None, filename=None):
+def AnimateReader(reader=None, view=None):
     """This is a utility function that, given a reader and a view
-    animates over all time steps of the reader. If the optional
-    filename is provided, a movie is created (type depends on the
-    extension of the filename."""
+    animates over all time steps of the reader."""
     if not reader:
         reader = active_objects.source
     if not view:
         view = active_objects.view
 
-    return servermanager.AnimateReader(reader, view, filename)
+    return servermanager.AnimateReader(reader, view)
 
 # -----------------------------------------------------------------------------
 
@@ -1809,9 +2024,39 @@ def LoadPlugin(filename, remote=True, ns=None):
 
     Otherwise, the new functions will not appear in the global namespace."""
 
-    if not ns:
-        ns = globals()
-    servermanager.LoadPlugin(filename, remote)
+    return LoadPlugins(filename, remote=remote, ns=ns)
+
+# -----------------------------------------------------------------------------
+
+def LoadPlugins(*args, **kwargs):
+    """Loads ParaView plugins and updates this module with new constructors
+    if any. The remote keword argument (default to ``True``) is to specify
+    whether the plugin will be loaded on client (``remote=False``) or on server
+    (``remote=True``). Proxy definition updates are deferred until all plugins
+    have been read, which can be more computationally efficient when multiple
+    plugins are loaded in sequence.
+    If you loaded the simple module with ``from paraview.simple import *``,
+    make sure to pass ``globals()`` as a keyword argument::
+
+        LoadPlugins("myplugin1", "myplugin2", remote=False, ns=globals()) # to load on client
+        LoadPlugins("myplugin", "myplugin2", remote=True, ns=globals())  # to load on server
+        LoadPlugins("myplugin", "myplugin2", ns=globals())     # to load on server
+
+    Otherwise, the new functions will not appear in the global namespace."""
+
+    remote = True
+    if 'remote' in kwargs:
+        remote = kwargs['remote']
+
+    ns = globals()
+    if 'ns' in kwargs and kwargs['ns']:
+        ns = kwargs['ns']
+
+    servermanager.vtkSMProxyManager.GetProxyManager().SetBlockProxyDefinitionUpdates(True)
+    for arg in args:
+        servermanager.LoadPlugin(arg, remote)
+    servermanager.vtkSMProxyManager.GetProxyManager().SetBlockProxyDefinitionUpdates(False)
+    servermanager.vtkSMProxyManager.GetProxyManager().UpdateProxyDefinitions()
     _add_functions(ns)
 
 # -----------------------------------------------------------------------------
@@ -1971,6 +2216,22 @@ def GetMaterialLibrary():
     return controller.FindMaterialLibrary(session)
 
 #==============================================================================
+# Textures.
+#==============================================================================
+def CreateTexture(filename=None):
+    """Creates and returns a new vtkTexture.
+    The texture is not attached to anything by default but it can be applied
+    to things, for example the view, like so.
+    >>> GetActiveView().UseTexturedBackground = 1
+    >>> GetActiveView().BackgroundTexture = CreateTexture("foo.png")
+    """
+    pxm = servermanager.ProxyManager()
+    textureproxy = pxm.NewProxy("textures", "ImageTexture")
+    controller = servermanager.ParaViewPipelineController()
+    controller.SMController.RegisterTextureProxy(textureproxy, filename)
+    return servermanager._getPyProxy(textureproxy)
+
+#==============================================================================
 # Miscellaneous functions.
 #==============================================================================
 def Show3DWidgets(proxy=None):
@@ -2037,6 +2298,13 @@ def ResetProperty(propertyName, proxy=None, restoreFromSettings=True):
             settings.GetPropertySetting(propertyToReset)
 
         proxy.SMProxy.UpdateVTKObjects()
+
+def GetOpenGLInformation(location=servermanager.vtkSMSession.CLIENT):
+    """Recover OpenGL information, by default on the client"""
+    openGLInfo = paraview.modules.vtkRemotingViews.vtkPVOpenGLInformation()
+    session = servermanager.vtkSMProxyManager.GetProxyManager().GetActiveSession()
+    session.GatherInformation(location, openGLInfo, 0)
+    return openGLInfo
 
 #==============================================================================
 # Usage and demo code set
@@ -2138,11 +2406,22 @@ def _create_func(key, module, skipRegisteration=False):
         all non-keyword arguments are assumed to be inputs. All keyword arguments are
         assumed to be property,value pairs and are passed to the new proxy."""
 
+        registrationName = None
+        for nameParam in ['registrationName', 'guiName']:
+          if nameParam in params:
+              registrationName = params[nameParam]
+              del params[nameParam]
+
         # Create a controller instance.
         controller = servermanager.ParaViewPipelineController()
 
-        # Instantiate the actual object from the given module.
-        px = paraview._backwardscompatibilityhelper.GetProxy(module, key)
+        from .catalyst.detail import IsInsituInput, CreateProducer
+        if IsInsituInput(registrationName):
+            # This is a catalyst input, replace with a trivial producer
+            px = CreateProducer(registrationName)
+        else:
+            # Instantiate the actual object from the given module.
+            px = paraview._backwardscompatibilityhelper.GetProxy(module, key, no_update=True)
 
         # preinitialize the proxy.
         controller.PreInitializeProxy(px)
@@ -2171,17 +2450,14 @@ def _create_func(key, module, skipRegisteration=False):
             if len(input) > 0:
                 raise RuntimeError ("This function does not expect an input.")
 
-        registrationName = None
-        for nameParam in ['registrationName', 'guiName']:
-          if nameParam in params:
-              registrationName = params[nameParam]
-              del params[nameParam]
-
         # Pass all the named arguments as property,value pairs
         SetProperties(px, **params)
 
         # post initialize
         controller.PostInitializeProxy(px)
+
+        if isinstance(px, servermanager.MultiplexerSourceProxy):
+            px.UpdateDynamicProperties()
 
         if not skipRegisteration:
             # Register the proxy with the proxy manager (assuming we are only using
@@ -2373,12 +2649,12 @@ class _active_objects(object):
         "Internal method."
         if not px:
             return None
-        if px.IsA("vtkSMSourceProxy"):
-            return servermanager._getPyProxy(px)
-        else:
+        elif px.IsA("vtkSMOutputPort"):
             return servermanager.OutputPort(
               servermanager._getPyProxy(px.GetSourceProxy()),
               px.GetPortIndex())
+        else:
+            return servermanager._getPyProxy(px)
 
     def get_source(self):
         "Returns the active source."

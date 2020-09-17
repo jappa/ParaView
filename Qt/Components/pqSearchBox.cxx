@@ -43,6 +43,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqApplicationCore.h"
 #include "pqSettings.h"
 
+#include <cassert>
+
 //-----------------------------------------------------------------------------
 // Internals
 class pqSearchBox::pqInternals : public Ui::SearchBox
@@ -170,16 +172,16 @@ QString pqSearchBox::setSettingKey(const QString& key)
 
   this->SettingKey = key;
   this->updateFromSettings();
-  emit this->settingKeyChanged(this->SettingKey);
+  Q_EMIT this->settingKeyChanged(this->SettingKey);
   return oldKey;
 }
 
 //-----------------------------------------------------------------------------
 void pqSearchBox::onAdvancedButtonClicked(bool clicked)
 {
-  Q_ASSERT(this->isAdvancedSearchEnabled());
+  assert(this->isAdvancedSearchEnabled());
   this->updateSettings();
-  emit this->advancedSearchActivated(clicked);
+  Q_EMIT this->advancedSearchActivated(clicked);
 }
 
 //-----------------------------------------------------------------------------

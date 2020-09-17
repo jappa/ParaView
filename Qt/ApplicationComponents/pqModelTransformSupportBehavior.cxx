@@ -46,6 +46,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <QtDebug>
 
+#include <cassert>
+
 namespace
 {
 static vtkSMSourceProxy* FindVisibleProducerWithChangeOfBasisMatrix(pqView* view)
@@ -78,7 +80,7 @@ static vtkSMSourceProxy* FindVisibleProducerWithChangeOfBasisMatrix(pqView* view
 void SafeSetAxisTitle(vtkSMProxy* gridAxis, const char* pname, const char* value)
 {
   vtkSMProperty* prop = gridAxis->GetProperty(pname);
-  Q_ASSERT(prop);
+  assert(prop);
 
   vtkSMPropertyHelper helper(prop);
 
@@ -131,7 +133,7 @@ void pqModelTransformSupportBehavior::viewAdded(pqView* view)
 void pqModelTransformSupportBehavior::viewUpdated()
 {
   pqView* view = qobject_cast<pqView*>(this->sender());
-  Q_ASSERT(view);
+  assert(view);
 
   // Check if there is any data source visible in the view that has a
   // ChangeOfBasisMatrix and BoundingBoxInModelCoordinates specified.
@@ -149,7 +151,7 @@ void pqModelTransformSupportBehavior::viewUpdated()
 void pqModelTransformSupportBehavior::enableModelTransform(pqView* view, vtkSMSourceProxy* producer)
 {
   bool are_titles_valid;
-  vtkTuple<vtkStdString, 3> titles = this->getAxisTitles(producer, 0, &are_titles_valid);
+  vtkTuple<std::string, 3> titles = this->getAxisTitles(producer, 0, &are_titles_valid);
 
   if (vtkSMProxy* gridAxes3DActor =
         vtkSMPropertyHelper(view->getProxy(), "AxesGrid", /*quiet*/ true).GetAsProxy())
@@ -244,14 +246,14 @@ vtkTuple<double, 6> pqModelTransformSupportBehavior::getBoundingBoxInModelCoordi
 }
 
 //-----------------------------------------------------------------------------
-vtkTuple<vtkStdString, 3> pqModelTransformSupportBehavior::getAxisTitles(
+vtkTuple<std::string, 3> pqModelTransformSupportBehavior::getAxisTitles(
   vtkSMSourceProxy* producer, int port, bool* pisvalid)
 {
   bool dummy;
   pisvalid = pisvalid ? pisvalid : &dummy;
   *pisvalid = false;
 
-  vtkTuple<vtkStdString, 3> value;
+  vtkTuple<std::string, 3> value;
   vtkPVDataInformation* dinfo = producer->GetDataInformation(port);
   if (!dinfo)
   {

@@ -67,6 +67,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QTimer>
 #include <QtDebug>
 
+#include <cassert>
+
 //----------------------------------------------------------------------------
 const QMetaObject* pqServerLauncher::DefaultServerLauncherType = NULL;
 const QMetaObject* pqServerLauncher::setServerDefaultLauncherType(const QMetaObject* other)
@@ -208,6 +210,7 @@ QProcessEnvironment getDefaultEnvironment(const pqServerConfiguration& configura
   options.insert("PV_VERSION_FULL", PARAVIEW_VERSION_FULL);
   options.insert("PV_SERVER_HOST", resource.host());
   options.insert("PV_SERVER_PORT", QString::number(resource.port(11111)));
+  options.insert("PV_SSH_PF_SERVER_PORT", configuration.portForwardingLocalPort());
   options.insert("PV_DATA_SERVER_HOST", resource.dataServerHost());
   options.insert("PV_DATA_SERVER_PORT", QString::number(resource.dataServerPort(11111)));
   options.insert("PV_RENDER_SERVER_HOST", resource.renderServerHost());
@@ -236,7 +239,7 @@ bool createWidgets(QMap<QString, pqWidget*>& widgets, QDialog& dialog,
   const pqServerConfiguration& configuration, QProcessEnvironment& options)
 {
   vtkPVXMLElement* optionsXML = configuration.optionsXML();
-  Q_ASSERT(optionsXML != NULL);
+  assert(optionsXML != NULL);
 
   QFormLayout* formLayout = new QFormLayout();
   dialog.setLayout(formLayout);
@@ -340,6 +343,12 @@ bool createWidgets(QMap<QString, pqWidget*>& widgets, QDialog& dialog,
       else if (strcmp(typeNode->GetName(), "String") == 0)
       {
         QLineEdit* widget = new QLineEdit(QString(), &dialog);
+        widgets[name] = new pqWidget(widget, "text");
+      }
+      else if (strcmp(typeNode->GetName(), "Password") == 0)
+      {
+        QLineEdit* widget = new QLineEdit(QString(), &dialog);
+        widget->setEchoMode(QLineEdit::Password);
         widgets[name] = new pqWidget(widget, "text");
       }
       else if (strcmp(typeNode->GetName(), "File") == 0)
@@ -583,7 +592,7 @@ bool pqServerLauncher::connectToServer()
   vtkProcessModule* pm = vtkProcessModule::GetProcessModule();
   vtkNetworkAccessManager* nam = pm->GetNetworkAccessManager();
   vtkPVOptions* options = pm->GetOptions();
-  QDialog dialog(pqCoreUtilities::mainWidget());
+  QDialog dialog(pqCoreUtilities::mainWidget(), Qt::WindowStaysOnTopHint);
   Ui::pqConnectIdDialog ui;
   ui.setupUi(&dialog);
   ui.connectId->setMaximum(VTK_INT_MAX);
@@ -606,7 +615,7 @@ bool pqServerLauncher::connectToPrelaunchedServer()
 {
   pqObjectBuilder* builder = pqApplicationCore::instance()->getObjectBuilder();
 
-  QDialog dialog(pqCoreUtilities::mainWidget());
+  QDialog dialog(pqCoreUtilities::mainWidget(), Qt::WindowStaysOnTopHint);
   QObject::connect(&dialog, SIGNAL(rejected()), builder, SLOT(abortPendingConnections()));
 
   Ui::pqServerLauncherDialog ui;
@@ -623,7 +632,7 @@ bool pqServerLauncher::connectToPrelaunchedServer()
     dialog.activateWindow();
   }
 
-  const pqServerResource& resource = this->Internals->Configuration.resource();
+  const pqServerResource& resource = this->Internals->Configuration.actualResource();
   this->Internals->Server =
     builder->createServer(resource, this->Internals->Configuration.connectionTimeout());
   return this->Internals->Server != NULL;
@@ -632,7 +641,7 @@ bool pqServerLauncher::connectToPrelaunchedServer()
 //-----------------------------------------------------------------------------
 bool pqServerLauncher::isReverseConnection() const
 {
-  const pqServerResource& resource = this->Internals->Configuration.resource();
+  const pqServerResource& resource = this->Internals->Configuration.actualResource();
   return (resource.scheme() == "csrc" || resource.scheme() == "cdsrsrc");
 }
 
@@ -649,7 +658,7 @@ bool pqServerLauncher::promptOptions()
     return true;
   }
 
-  QDialog dialog(pqCoreUtilities::mainWidget());
+  QDialog dialog(pqCoreUtilities::mainWidget(), Qt::WindowStaysOnTopHint);
 
   // setup the dialog using the configuration's XML.
   QMap<QString, pqWidget*>& widgets = this->Internals->ActiveWidgets;
@@ -724,7 +733,7 @@ bool pqServerLauncher::launchServer(bool show_status_dialog)
   }
 
   // Pop-up a dialog to tell the user that the server is being launched.
-  QDialog dialog(pqCoreUtilities::mainWidget());
+  QDialog dialog(pqCoreUtilities::mainWidget(), Qt::WindowStaysOnTopHint);
   Ui::pqServerLauncherDialog ui;
   ui.setupUi(&dialog);
   ui.cancel->hide();
@@ -737,7 +746,7 @@ bool pqServerLauncher::launchServer(bool show_status_dialog)
   }
 
   // replace all $FOO$ with values for QProcessEnvironment.
-  QRegExp regex("\\$([^$]*)\\$");
+  QRegExp regex("\\$([^$ ]*)\\$");
 
   // Do string-substitution for the command line.
   while (regex.indexIn(command) > -1)

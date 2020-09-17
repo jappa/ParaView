@@ -42,8 +42,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMPropertyGroup.h"
 #include "vtkSMPropertyHelper.h"
 
-#include <QDoubleValidator>
-
 class pqLinePropertyWidget::pqInternals
 {
 public:
@@ -67,13 +65,6 @@ pqLinePropertyWidget::pqLinePropertyWidget(
 #ifdef Q_OS_MAC
   ui.pickLabel->setText(ui.pickLabel->text().replace("Ctrl", "Cmd"));
 #endif
-
-  new QDoubleValidator(ui.point1X);
-  new QDoubleValidator(ui.point1Y);
-  new QDoubleValidator(ui.point1Z);
-  new QDoubleValidator(ui.point2X);
-  new QDoubleValidator(ui.point2Y);
-  new QDoubleValidator(ui.point2Z);
 
   if (vtkSMProperty* p1 = smgroup->GetProperty("Point1WorldPosition"))
   {
@@ -205,64 +196,27 @@ vtkBoundingBox pqLinePropertyWidget::referenceBounds() const
 }
 
 //-----------------------------------------------------------------------------
-void pqLinePropertyWidget::useXAxis()
+void pqLinePropertyWidget::useAxis(int axis)
 {
   vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
   vtkBoundingBox bbox = this->referenceBounds();
   if (bbox.IsValid())
   {
+    const auto delta =
+      0.5 * (bbox.GetLength(axis) > 0 ? bbox.GetLength(axis) : bbox.GetDiagonalLength());
+
     double center[3];
     bbox.GetCenter(center);
-    center[0] -= bbox.GetLength(0) * 0.5;
+
+    center[axis] -= delta;
     vtkSMPropertyHelper(wdgProxy, "Point1WorldPosition").Set(center, 3);
 
     bbox.GetCenter(center);
-    center[0] += bbox.GetLength(0) * 0.5;
+    center[axis] += delta;
+
     vtkSMPropertyHelper(wdgProxy, "Point2WorldPosition").Set(center, 3);
     wdgProxy->UpdateVTKObjects();
-    emit this->changeAvailable();
-    this->render();
-  }
-}
-
-//-----------------------------------------------------------------------------
-void pqLinePropertyWidget::useYAxis()
-{
-  vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
-  vtkBoundingBox bbox = this->referenceBounds();
-  if (bbox.IsValid())
-  {
-    double center[3];
-    bbox.GetCenter(center);
-    center[1] -= bbox.GetLength(1) * 0.5;
-    vtkSMPropertyHelper(wdgProxy, "Point1WorldPosition").Set(center, 3);
-
-    bbox.GetCenter(center);
-    center[1] += bbox.GetLength(1) * 0.5;
-    vtkSMPropertyHelper(wdgProxy, "Point2WorldPosition").Set(center, 3);
-    wdgProxy->UpdateVTKObjects();
-    emit this->changeAvailable();
-    this->render();
-  }
-}
-
-//-----------------------------------------------------------------------------
-void pqLinePropertyWidget::useZAxis()
-{
-  vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
-  vtkBoundingBox bbox = this->referenceBounds();
-  if (bbox.IsValid())
-  {
-    double center[3];
-    bbox.GetCenter(center);
-    center[2] -= bbox.GetLength(2) * 0.5;
-    vtkSMPropertyHelper(wdgProxy, "Point1WorldPosition").Set(center, 3);
-
-    bbox.GetCenter(center);
-    center[2] += bbox.GetLength(2) * 0.5;
-    vtkSMPropertyHelper(wdgProxy, "Point2WorldPosition").Set(center, 3);
-    wdgProxy->UpdateVTKObjects();
-    emit this->changeAvailable();
+    Q_EMIT this->changeAvailable();
     this->render();
   }
 }
@@ -280,7 +234,7 @@ void pqLinePropertyWidget::centerOnBounds()
   vtkSMPropertyHelper(wdgProxy, "Point1WorldPosition").Set(bbox.GetMinPoint(), 3);
   vtkSMPropertyHelper(wdgProxy, "Point2WorldPosition").Set(bbox.GetMaxPoint(), 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }
 
@@ -315,7 +269,7 @@ void pqLinePropertyWidget::pickPoint1(double wx, double wy, double wz)
   vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
   vtkSMPropertyHelper(wdgProxy, "Point1WorldPosition").Set(position, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }
 
@@ -326,6 +280,6 @@ void pqLinePropertyWidget::pickPoint2(double wx, double wy, double wz)
   vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
   vtkSMPropertyHelper(wdgProxy, "Point2WorldPosition").Set(position, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }

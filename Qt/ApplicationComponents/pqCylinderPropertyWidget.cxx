@@ -40,7 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMPropertyHelper.h"
 #include "vtkSMRenderViewProxy.h"
 
-#include <QDoubleValidator>
+#include <cassert>
 
 namespace
 {
@@ -71,14 +71,6 @@ pqCylinderPropertyWidget::pqCylinderPropertyWidget(
 {
   Ui::CylinderPropertyWidget ui;
   ui.setupUi(this);
-
-  new QDoubleValidator(ui.centerX);
-  new QDoubleValidator(ui.centerY);
-  new QDoubleValidator(ui.centerZ);
-  new QDoubleValidator(ui.axisX);
-  new QDoubleValidator(ui.axisY);
-  new QDoubleValidator(ui.axisZ);
-  new QDoubleValidator(ui.radius);
 
   if (vtkSMProperty* center = smgroup->GetProperty("Center"))
   {
@@ -179,7 +171,7 @@ void pqCylinderPropertyWidget::placeWidget()
   }
 
   vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
-  Q_ASSERT(wdgProxy);
+  assert(wdgProxy);
 
   double scaleFactor = vtkSMPropertyHelper(wdgProxy, "PlaceFactor").GetAsDouble();
   pqAdjustBounds(bbox, scaleFactor);
@@ -193,7 +185,7 @@ void pqCylinderPropertyWidget::placeWidget()
 void pqCylinderPropertyWidget::resetBounds()
 {
   vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
-  Q_ASSERT(wdgProxy);
+  assert(wdgProxy);
 
   vtkBoundingBox bbox = this->dataBounds();
   if (!bbox.IsValid())
@@ -215,7 +207,7 @@ void pqCylinderPropertyWidget::resetBounds()
     vtkSMPropertyHelper(wdgProxy, "WidgetBounds").Set(bnds, 6);
     wdgProxy->UpdateProperty("WidgetBounds", true);
 
-    emit this->changeAvailable();
+    Q_EMIT this->changeAvailable();
     this->render();
   }
 }
@@ -262,7 +254,7 @@ void pqCylinderPropertyWidget::setAxis(double wx, double wy, double wz)
   double axis[3] = { wx, wy, wz };
   vtkSMPropertyHelper(wdgProxy, "Axis").Set(axis, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }
 

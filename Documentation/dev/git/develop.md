@@ -45,7 +45,7 @@ Before you begin, perform initial setup:
     "Subscribe to this project" on the right of ParaView.
 
 [GitLab Access]: https://gitlab.kitware.com/users/sign_in
-[Fork ParaView]: https://gitlab.kitware.com/paraview/paraview/forks/new
+[Fork ParaView]: https://gitlab.kitware.com/paraview/paraview/-/forks/new
 [developer setup script]: /Utilities/SetupForDevelopment.sh
 
 Workflow
@@ -122,6 +122,7 @@ cases, being your topic name with the issue number.
 
     Caveats:
     * To add data follow these [vtk instructions][].
+    * To add icons, Kitware's graphic designer may be able to help create an SVG icon.
 
     Commit messages must contain a brief description as the first line
     and a more detailed description of what the commit contains. If
@@ -138,10 +139,11 @@ cases, being your topic name with the issue number.
     * Choose `Tools .. Record Test` to start.
     * Choose `Tools .. Lock View Size Custom...` - a 400x400 window works well.
     * Perform actions in the GUI that exercise your feature. Stop recording.
-    * Put the resulting XML file into `Applications/ParaView/Testing/XML`
+    * Put the resulting XML file into `Clients/ParaView/Testing/XML`
     * Add it to CMakeLists.txt, probably in a TESTS_WITH_BASELINES section
         * you can manually add `<pqcompareview>` for multiple image comparisons, then add to the TESTS_WITH_INLINE_COMPARES section
     * Follow the [vtk instructions][] to add the baseline images, which live in `Testing/Data/Baseline/`.
+        * Add your new baseline images to the list in `Testing/XML/CMakeLists.txt`
     * Add all testing files to your topic.
 
     Some background is in the [testing design wiki](https://www.paraview.org/Wiki/Testing_design).
@@ -153,7 +155,7 @@ cases, being your topic name with the issue number.
     This is not necessary for branches which are "trivial" such as fixing
     typos, updating test baselines, or are developer-oriented.
 
-[vtk instructions]: https://gitlab.kitware.com/vtk/vtk/blob/master/Documentation/dev/git/data.md
+[vtk instructions]: https://gitlab.kitware.com/vtk/vtk/-/blob/master/Documentation/dev/git/data.md
 
 Share a Topic
 -------------
@@ -180,7 +182,7 @@ signed in for [GitLab Access][] and created your fork by visiting the main
     Notes:
     * If you are revising a previously pushed topic and have rewritten the
       topic history, add `-f` or `--force` to overwrite the destination.
-    * If the topic adds data see [this note](https://gitlab.kitware.com/vtk/vtk/blob/master/Documentation/dev/git/data.md#push).
+    * If the topic adds data see [this note](https://gitlab.kitware.com/vtk/vtk/-/blob/master/Documentation/dev/git/data.md#push).
     * The `gitlab-push` script also pushes the `master` branch to your
       fork in GitLab to keep it in sync with the upstream `master`.
 
@@ -198,7 +200,7 @@ left, and use the "**New Merge Request**" button in the upper right to
 reach the URL printed at the end of the [previous step](#share-a-topic).
 It should be of the form:
 
-    https://gitlab.kitware.com/<username>/paraview/merge_requests/new
+    https://gitlab.kitware.com/<username>/paraview/-/merge_requests/new
 
 Follow these steps:
 
@@ -499,4 +501,4 @@ been approved and merged into VTK, then:
 
 3. Follow the merge process documented earlier.
 
-[VTK's development workflow]: https://gitlab.kitware.com/vtk/vtk/tree/master/Documentation/dev/git
+[VTK's development workflow]: https://gitlab.kitware.com/vtk/vtk/-/tree/master/Documentation/dev/git

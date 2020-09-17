@@ -31,8 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ========================================================================*/
 #include "pqParaViewBehaviors.h"
 
-#include "vtkPVConfig.h" // for PARAVIEW_ENABLE_PYTHON
-
 #include "pqAlwaysConnectedBehavior.h"
 #include "pqApplicationCore.h"
 #include "pqApplyBehavior.h"
@@ -47,6 +45,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqInterfaceTracker.h"
 #include "pqLiveSourceBehavior.h"
 #include "pqLockPanelsBehavior.h"
+#include "pqMainWindowEventBehavior.h"
 #include "pqObjectPickingBehavior.h"
 #include "pqPersistentMainWindowStateBehavior.h"
 #include "pqPipelineContextMenuBehavior.h"
@@ -66,7 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqVerifyRequiredPluginBehavior.h"
 #include "pqViewStreamingBehavior.h"
 
-#if defined(PARAVIEW_ENABLE_PYTHON)
+#if VTK_MODULE_ENABLE_ParaView_pqPython
 #include "pqPythonShell.h"
 #endif
 
@@ -76,6 +75,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QMainWindow>
 #include <QShortcut>
 #include <QSlider>
+
+#include <cassert>
 
 namespace
 {
@@ -89,7 +90,7 @@ public:
   ~WheelFilter() {}
   bool eventFilter(QObject* obj, QEvent* evt) override
   {
-    Q_ASSERT(obj && evt);
+    assert(obj && evt);
     if (obj->isWidgetType()) // shortcut to avoid doing work when not a widget.
     {
       QWidget* wdg = reinterpret_cast<QWidget*>(obj);
@@ -155,6 +156,7 @@ PQ_BEHAVIOR_DEFINE_FLAG(PythonShellResetBehavior, true);
 PQ_BEHAVIOR_DEFINE_FLAG(WheelNeedsFocusBehavior, true);
 PQ_BEHAVIOR_DEFINE_FLAG(LiveSourceBehavior, true);
 PQ_BEHAVIOR_DEFINE_FLAG(CustomShortcutBehavior, true);
+PQ_BEHAVIOR_DEFINE_FLAG(MainWindowEventBehavior, true);
 #undef PQ_BEHAVIOR_DEFINE_FLAG
 
 #define PQ_IS_BEHAVIOR_ENABLED(_name) enable##_name()
@@ -183,9 +185,6 @@ pqParaViewBehaviors::pqParaViewBehaviors(QMainWindow* mainWindow, QObject* paren
     // Register standard recent file menu handlers.
     pgm->addInterface(new pqStandardRecentlyUsedResourceLoaderImplementation(pgm));
   }
-
-  // Load plugins distributed with application.
-  pqApplicationCore::instance()->loadDistributedPlugins();
 
   // Define application behaviors.
   if (PQ_IS_BEHAVIOR_ENABLED(DataTimeStepBehavior))
@@ -304,9 +303,6 @@ pqParaViewBehaviors::pqParaViewBehaviors(QMainWindow* mainWindow, QObject* paren
     QShortcut* altSpace = new QShortcut(Qt::ALT + Qt::Key_Space, mainWindow);
     QObject::connect(
       altSpace, SIGNAL(activated()), pqApplicationCore::instance(), SLOT(quickLaunch()));
-    QShortcut* ctrlF = new QShortcut(Qt::CTRL + Qt::Key_F, mainWindow);
-    QObject::connect(
-      ctrlF, SIGNAL(activated()), pqApplicationCore::instance(), SLOT(startSearch()));
   }
 
   if (PQ_IS_BEHAVIOR_ENABLED(LockPanelsBehavior))
@@ -314,7 +310,7 @@ pqParaViewBehaviors::pqParaViewBehaviors(QMainWindow* mainWindow, QObject* paren
     new pqLockPanelsBehavior(mainWindow);
   }
 
-#if defined(PARAVIEW_ENABLE_PYTHON)
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   if (PQ_IS_BEHAVIOR_ENABLED(PythonShellResetBehavior))
   {
     pqServerManagerModel* smmodel = pqApplicationCore::instance()->getServerManagerModel();
@@ -333,6 +329,10 @@ pqParaViewBehaviors::pqParaViewBehaviors(QMainWindow* mainWindow, QObject* paren
   if (PQ_IS_BEHAVIOR_ENABLED(CustomShortcutBehavior))
   {
     new pqCustomShortcutBehavior(mainWindow);
+  }
+  if (PQ_IS_BEHAVIOR_ENABLED(MainWindowEventBehavior))
+  {
+    new pqMainWindowEventBehavior(mainWindow);
   }
   CLEAR_UNDO_STACK();
 }

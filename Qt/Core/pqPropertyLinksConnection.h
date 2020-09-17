@@ -88,7 +88,13 @@ public:
   vtkSMProperty* propertySM() const { return this->PropertySM; }
   int indexSM() const { return this->IndexSM; }
 
-public slots:
+  /**
+   * Provide access to whether changes sent from Qt to the server manager are traceable.
+   */
+  void setTraceChanges(bool trace) { this->TraceChanges = trace; }
+  bool traceChanges() const { return this->TraceChanges; }
+
+public Q_SLOTS:
   /**
   * Copy values from ServerManager to Qt. If use_unchecked is true, unchecked
   * SMProperty values are used.
@@ -111,7 +117,7 @@ protected:
   virtual QVariant currentQtValue() const;
   virtual QVariant currentServerManagerValue(bool use_unchecked) const;
 
-signals:
+Q_SIGNALS:
   /**
   * Fired whenever the Qt widget changes (except in during a call to
   * copyValuesFromServerManagerToQt()).
@@ -135,6 +141,7 @@ private:
   vtkWeakPointer<vtkSMProxy> ProxySM;
   vtkWeakPointer<vtkSMProperty> PropertySM;
   int IndexSM;
+  bool TraceChanges;
 };
 
 #endif

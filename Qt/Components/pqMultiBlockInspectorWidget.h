@@ -73,6 +73,9 @@ class PQCOMPONENTS_EXPORT pqMultiBlockInspectorWidget : public QWidget
   Q_PROPERTY(QList<QVariant> blockOpacities READ blockOpacities WRITE setBlockOpacities NOTIFY
       blockOpacitiesChanged);
 
+  Q_PROPERTY(QList<QVariant> visibleBlocks READ visibleBlocks WRITE setVisibleBlocks NOTIFY
+      blockOpacitiesChanged);
+
 public:
   pqMultiBlockInspectorWidget(
     QWidget* parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags(), bool autotracking = true);
@@ -94,6 +97,15 @@ public:
    */
   QList<QVariant> blockVisibilities() const;
   void setBlockVisibilities(const QList<QVariant>& bvs);
+  //@}
+
+  //@{
+  /**
+   * Get/Set the visible blocks. Unlike blockVisibilities, this is compact list
+   * of visible blocks given the current hierarchy.
+   */
+  QList<QVariant> visibleBlocks() const;
+  void setVisibleBlocks(const QList<QVariant>& vbs);
   //@}
 
   //@{
@@ -131,7 +143,7 @@ public:
    */
   pqDataRepresentation* representation() const;
 
-public slots:
+public Q_SLOTS:
   /**
    * When auto-tracking is disabled, sets the port to use to get the data
    * information for this widget to show.
@@ -151,7 +163,7 @@ public slots:
    */
   void setView(pqView* view);
 
-private slots:
+private Q_SLOTS:
   void setOutputPortInternal(pqOutputPort* port);
   void setViewInternal(pqView* view);
   void setRepresentation(pqDataRepresentation* repr);
@@ -169,7 +181,7 @@ private slots:
    */
   void updateScalarColoring();
 
-signals:
+Q_SIGNALS:
   void blockVisibilitiesChanged();
   void blockColorsChanged();
   void blockOpacitiesChanged();

@@ -22,9 +22,12 @@
 #include <vtksys/String.hxx>
 #include <vtksys/SystemTools.hxx>
 
-#include <assert.h>
-
+#include <algorithm>
+#include <cassert>
+#include <chrono>
 #include <sstream>
+#include <thread>
+
 #if !defined(_WIN32) || defined(__CYGWIN__)
 #include <sys/wait.h>
 #include <unistd.h>
@@ -74,11 +77,11 @@ vtkSMTestDriver::vtkSMTestDriver()
   this->TestRenderServer = 0;
   this->TestServer = 0;
   this->TestScript = 0;
-  this->TestTiledDisplay = 0;
   this->ReverseConnection = 0;
   this->TestRemoteRendering = 0;
   this->TestMultiClient = 0;
   this->NumberOfServers = 1;
+  this->ClientUseMPI = false;
 
   // Setup process types
   this->ServerExecutable.Type = SERVER;
@@ -122,37 +125,33 @@ void vtkSMTestDriver::CollectConfiguredOptions()
 
 // now find all the mpi information if mpi run is set
 #ifdef PARAVIEW_USE_MPI
-#ifdef VTK_MPIRUN_EXE
-  this->MPIRun = VTK_MPIRUN_EXE;
+#ifdef PARAVIEW_MPIEXEC_EXECUTABLE
+  this->MPIRun = PARAVIEW_MPIEXEC_EXECUTABLE;
 #else
-  cerr << "Error: VTK_MPIRUN_EXE must be set when PARAVIEW_USE_MPI is on.\n";
-  return;
+#error "Error: PARAVIEW_MPIEXEC_EXECUTABLE must be set when PARAVIEW_USE_MPI is on."
 #endif
   int serverNumProc = 1;
   int renderNumProc = 1;
-
-#ifdef VTK_MPI_MAX_NUMPROCS
-  serverNumProc = VTK_MPI_MAX_NUMPROCS;
-  renderNumProc = serverNumProc - 1;
-  if (renderNumProc <= 0)
+#ifdef PARAVIEW_MPI_MAX_NUMPROCS
+  serverNumProc = PARAVIEW_MPI_MAX_NUMPROCS;
+#endif
+  if (vtksys::SystemTools::HasEnv("SMTESTDRIVER_MPI_NUMPROCS"))
   {
-    renderNumProc = 1;
+    serverNumProc = std::atoi(vtksys::SystemTools::GetEnv("SMTESTDRIVER_MPI_NUMPROCS"));
   }
-#endif
-#ifdef VTK_MPI_NUMPROC_FLAG
-  this->MPINumProcessFlag = VTK_MPI_NUMPROC_FLAG;
+  serverNumProc = std::max(1, serverNumProc);
+  renderNumProc = std::max(1, serverNumProc - 1);
+
+#ifdef PARAVIEW_MPI_NUMPROC_FLAG
+  this->MPINumProcessFlag = PARAVIEW_MPI_NUMPROC_FLAG;
 #else
-  cerr << "Error VTK_MPI_NUMPROC_FLAG must be defined to run test if MPI is on.\n";
-  return;
+#error "Error PARAVIEW_MPI_NUMPROC_FLAG must be defined to run test if MPI is on."
 #endif
-#ifdef VTK_MPI_PRENUMPROC_FLAGS
-  this->SeparateArguments(VTK_MPI_PRENUMPROC_FLAGS, this->MPIPreNumProcFlags);
+#ifdef PARAVIEW_MPI_PREFLAGS
+  this->SeparateArguments(PARAVIEW_MPI_PREFLAGS, this->MPIPreFlags);
 #endif
-#ifdef VTK_MPI_PREFLAGS
-  this->SeparateArguments(VTK_MPI_PREFLAGS, this->MPIPreFlags);
-#endif
-#ifdef VTK_MPI_POSTFLAGS
-  this->SeparateArguments(VTK_MPI_POSTFLAGS, this->MPIPostFlags);
+#ifdef PARAVIEW_MPI_POSTFLAGS
+  this->SeparateArguments(PARAVIEW_MPI_POSTFLAGS, this->MPIPostFlags);
 #endif
   char buf[1024];
   sprintf(buf, "%d", serverNumProc);
@@ -161,19 +160,6 @@ void vtkSMTestDriver::CollectConfiguredOptions()
   sprintf(buf, "%d", renderNumProc);
   this->MPIRenderServerNumProcessFlag = buf;
 
-#endif // PARAVIEW_USE_MPI
-
-#ifdef VTK_MPI_SERVER_PREFLAGS
-  this->SeparateArguments(VTK_MPI_SERVER_PREFLAGS, this->MPIServerPreFlags);
-#endif
-#ifdef VTK_MPI_SERVER_POSTFLAGS
-  this->SeparateArguments(VTK_MPI_SERVER_POSTFLAGS, this->MPIServerPostFlags);
-#endif
-#ifdef VTK_MPI_SERVER_TD_PREFLAGS
-  this->SeparateArguments(VTK_MPI_SERVER_TD_PREFLAGS, this->TDServerPreFlags);
-#endif
-#ifdef VTK_MPI_SERVER_TD_POSTFLAGS
-  this->SeparateArguments(VTK_MPI_SERVER_TD_POSTFLAGS, this->TDServerPostFlags);
 #endif
 
 // For remote testing (via ssh)
@@ -202,8 +188,9 @@ int vtkSMTestDriver::ProcessCommandLine(int argc, char* argv[])
   int i;
   for (i = 1; i < argc - 1; ++i)
   {
-    if (strcmp(argv[i], "--client") == 0)
+    if (strcmp(argv[i], "--client") == 0 || strcmp(argv[i], "--client-mpi") == 0)
     {
+      this->ClientUseMPI = (strcmp(argv[i], "--client-mpi") == 0);
       ExecutableInfo info;
       info.Executable = ::FixExecutablePath(argv[i + 1]);
       info.ArgStart = i + 2;
@@ -254,16 +241,6 @@ int vtkSMTestDriver::ProcessCommandLine(int argc, char* argv[])
       this->ScriptExecutable.ArgEnd = FindLastExecutableArg(i + 2, argc, argv);
       fprintf(stderr, "Test Script.\n");
     }
-    if (strcmp(argv[i], "--test-tiled") == 0)
-    {
-      this->TestServer = 1;
-      this->TestTiledDisplay = 1;
-      this->TestTiledDisplayTDX = "-tdx=";
-      this->TestTiledDisplayTDX += argv[i + 1];
-      this->TestTiledDisplayTDY = "-tdy=";
-      this->TestTiledDisplayTDY += argv[i + 2];
-      fprintf(stderr, "Test Tiled Display.\n");
-    }
     if (strcmp(argv[i], "--test-multi-clients") == 0)
     {
       this->TestMultiClient = 1;
@@ -296,8 +273,7 @@ int vtkSMTestDriver::ProcessCommandLine(int argc, char* argv[])
     }
     if (strncmp(argv[i], "--server-preflags", 17) == 0)
     {
-      this->SeparateArguments(argv[i + 1], this->MPIServerPreFlags);
-      fprintf(stderr, "Extras server preflags were specified: %s\n", argv[i + 1]);
+      fprintf(stderr, "Server preflags are no longer supported.\n");
     }
     if (strncmp(argv[i], "--allow-errors", strlen("--allow-errors")) == 0)
     {
@@ -324,43 +300,14 @@ int vtkSMTestDriver::ProcessCommandLine(int argc, char* argv[])
 void vtkSMTestDriver::CreateCommandLine(std::vector<const char*>& commandLine, const char* paraView,
   vtkSMTestDriver::ProcessType type, const char* numProc, int argStart, int argEnd, char* argv[])
 {
-  if (this->MPIRun.size() && type != CLIENT)
+  if (this->MPIRun.size() && (type != CLIENT || this->ClientUseMPI))
   {
     commandLine.push_back(this->MPIRun.c_str());
-    if (!this->TestTiledDisplay)
-    {
-      for (unsigned int i = 0; i < this->MPIPreNumProcFlags.size(); ++i)
-      {
-        commandLine.push_back(this->MPIPreNumProcFlags[i].c_str());
-      }
-    }
     commandLine.push_back(this->MPINumProcessFlag.c_str());
     commandLine.push_back(numProc);
-    if (!this->TestTiledDisplay)
+    for (unsigned int i = 0; i < this->MPIPreFlags.size(); ++i)
     {
-      for (unsigned int i = 0; i < this->MPIPreFlags.size(); ++i)
-      {
-        commandLine.push_back(this->MPIPreFlags[i].c_str());
-      }
-      // If there is specific flags for the server to pass to mpirun, add them
-      if (type == SERVER || type == DATA_SERVER)
-      {
-        for (unsigned int i = 0; i < this->MPIServerPreFlags.size(); ++i)
-        {
-          commandLine.push_back(this->MPIServerPreFlags[i].c_str());
-        }
-      }
-    }
-    else ///  When tile display is enabled.
-    {
-      // If there is specific flags for the server to pass to mpirun, add them
-      if (type == SERVER || type == DATA_SERVER)
-      {
-        for (unsigned int i = 0; i < this->TDServerPreFlags.size(); ++i)
-        {
-          commandLine.push_back(this->TDServerPreFlags[i].c_str());
-        }
-      }
+      commandLine.push_back(this->MPIPreFlags[i].c_str());
     }
   }
 
@@ -382,13 +329,6 @@ void vtkSMTestDriver::CreateCommandLine(std::vector<const char*>& commandLine, c
   else
   {
     commandLine.push_back(paraView);
-    if (type == CLIENT)
-    {
-      for (unsigned int i = 0; i < this->ClientPostFlags.size(); ++i)
-      {
-        commandLine.push_back(this->ClientPostFlags[i].c_str());
-      }
-    }
 
     if (this->ReverseConnection && type != CLIENT)
     {
@@ -398,39 +338,9 @@ void vtkSMTestDriver::CreateCommandLine(std::vector<const char*>& commandLine, c
 #endif
     }
 
-    if (!this->TestTiledDisplay)
+    for (unsigned int i = 0; i < this->MPIPostFlags.size(); ++i)
     {
-      for (unsigned int i = 0; i < this->MPIPostFlags.size(); ++i)
-      {
-        commandLine.push_back(MPIPostFlags[i].c_str());
-      }
-      // If there is specific flags for the server to pass to mpirun, add them
-      if (type == SERVER || type == DATA_SERVER)
-      {
-        for (unsigned int i = 0; i < this->MPIServerPostFlags.size(); ++i)
-        {
-          commandLine.push_back(this->MPIServerPostFlags[i].c_str());
-        }
-      }
-    }
-    else
-    {
-      // If there is specific flags for the server to pass to mpirun, add them
-      if (type == SERVER || type == DATA_SERVER)
-      {
-        if (this->TDServerPreFlags.size() == 0)
-        {
-          commandLine.push_back(this->TestTiledDisplayTDX.c_str());
-          commandLine.push_back(this->TestTiledDisplayTDY.c_str());
-        }
-        else
-        {
-          for (unsigned int i = 0; i < this->TDServerPostFlags.size(); ++i)
-          {
-            commandLine.push_back(this->TDServerPostFlags[i].c_str());
-          }
-        }
-      }
+      commandLine.push_back(MPIPostFlags[i].c_str());
     }
 
     // remaining flags for the test
@@ -626,6 +536,7 @@ int vtkSMTestDriver::Main(int argc, char* argv[])
   // we add this so that vtksys::SystemTools::EnableMSVCDebugHook() works. At
   // somepoint vtksys needs to be updated to use the newer variable.
   vtksys::SystemTools::PutEnv("DART_TEST_FROM_DART=1");
+  vtksys::SystemTools::PutEnv("PARAVIEW_SMTESTDRIVER=1");
   vtksys::SystemTools::EnableMSVCDebugHook();
 
 #ifdef PV_TEST_INIT_COMMAND
@@ -865,6 +776,9 @@ int vtkSMTestDriver::Main(int argc, char* argv[])
       if (clients.size() > 1)
       {
         client_name << cc;
+        // wait a few seconds before launching the additional clients for
+        // collaboration mode.
+        std::this_thread::sleep_for(std::chrono::seconds(2));
       }
 
       std::string output_to_ignore;
@@ -1318,8 +1232,8 @@ bool vtkSMTestDriver::SetupClient(vtksysProcess* process, const ExecutableInfo& 
   if (process)
   {
     std::vector<const char*> clientCommand;
-    this->CreateCommandLine(
-      clientCommand, info.Executable.c_str(), CLIENT, "", info.ArgStart, info.ArgEnd, argv);
+    this->CreateCommandLine(clientCommand, info.Executable.c_str(), CLIENT,
+      this->MPIServerNumProcessFlag.c_str(), info.ArgStart, info.ArgEnd, argv);
     if (!this->ReverseConnection && !this->ServerURL.empty())
     {
       // push-back server url, if present.

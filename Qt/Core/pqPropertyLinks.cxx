@@ -37,6 +37,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <QMap>
 #include <QtDebug>
+
+#include <cassert>
 #include <set>
 
 class pqPropertyLinks::pqInternals
@@ -70,6 +72,22 @@ pqPropertyLinks::~pqPropertyLinks()
 }
 
 //-----------------------------------------------------------------------------
+bool pqPropertyLinks::addPropertyLink(QObject* qobject, const char* qproperty, const char* qsignal,
+  vtkSMProxy* smproxy, vtkSMProperty* smproperty, int smindex)
+{
+  return this->addPropertyLink<pqPropertyLinksConnection>(
+    qobject, qproperty, qsignal, smproxy, smproperty, smindex);
+}
+
+//-----------------------------------------------------------------------------
+bool pqPropertyLinks::addTraceablePropertyLink(QObject* qobject, const char* qproperty,
+  const char* qsignal, vtkSMProxy* smproxy, vtkSMProperty* smproperty, int smindex)
+{
+  return this->addTraceablePropertyLink<pqPropertyLinksConnection>(
+    qobject, qproperty, qsignal, smproxy, smproperty, smindex);
+}
+
+//-----------------------------------------------------------------------------
 void pqPropertyLinks::setUseUncheckedProperties(bool val)
 {
   if (val == this->UseUncheckedProperties)
@@ -89,7 +107,7 @@ void pqPropertyLinks::setUseUncheckedProperties(bool val)
 //-----------------------------------------------------------------------------
 bool pqPropertyLinks::addNewConnection(pqPropertyLinksConnection* connection)
 {
-  Q_ASSERT(connection);
+  assert(connection);
 
   // Avoid adding duplicates.
   foreach (pqPropertyLinksConnection* existing, this->Internals->Connections)
@@ -160,7 +178,7 @@ void pqPropertyLinks::onQtPropertyModified()
     {
       connection->proxy()->UpdateVTKObjects();
     }
-    emit this->qtWidgetChanged();
+    Q_EMIT this->qtWidgetChanged();
 
     // although unintuitive, several panels e.g. pqDisplayProxyEditor expect
     // smPropertyChanged() whenever the SMProperty is chnaged, either by the GUI
@@ -172,7 +190,7 @@ void pqPropertyLinks::onQtPropertyModified()
     // behavior.
     if (this->autoUpdateVTKObjects() && connection->proxy())
     {
-      emit this->smPropertyChanged();
+      Q_EMIT this->smPropertyChanged();
     }
   }
 }
@@ -187,7 +205,7 @@ void pqPropertyLinks::onSMPropertyModified()
     if (connection)
     {
       connection->copyValuesFromServerManagerToQt(this->useUncheckedProperties());
-      emit this->smPropertyChanged();
+      Q_EMIT this->smPropertyChanged();
     }
   }
 }

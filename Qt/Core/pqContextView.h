@@ -69,6 +69,13 @@ public:
   virtual bool supportsSelection() const;
 
   /**
+  * Returns if this view module can support
+  * image capture. Returns false by default. Subclassess must override
+  * if that's not the case.
+  */
+  bool supportsCapture() const override { return true; }
+
+  /**
   * set/get the selection action in the context view, defined
   * by vtkChart enumeration from SELECT to SELECT_POLYGON.
   */
@@ -81,7 +88,7 @@ public:
   */
   void resetDisplay() override;
 
-protected slots:
+protected Q_SLOTS:
   //@{
   /**
    * Slots called when vtkCommand::StartInteractionEvent and

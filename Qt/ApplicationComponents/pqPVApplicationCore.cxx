@@ -41,14 +41,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqItemViewSearchWidget.h"
 #include "pqLoadDataReaction.h"
 #include "pqOptions.h"
+#include "pqPresetGroupsManager.h"
 #include "pqPropertiesPanel.h"
 #include "pqQuickLaunchDialog.h"
 #include "pqSelectionManager.h"
 #include "pqSetName.h"
 #include "pqSpreadSheetViewModel.h"
+#include "vtkPVLogger.h"
 #include "vtkProcessModule.h"
 
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
 #include "pqPythonManager.h"
 #endif
 
@@ -72,8 +74,25 @@ pqPVApplicationCore::pqPVApplicationCore(int& argc, char** argv, pqOptions* opti
 
   pqApplicationCore::instance()->registerManager("SELECTION_MANAGER", this->SelectionManager);
 
+  pqPresetGroupsManager* presetGroupManager = new pqPresetGroupsManager(this);
+  QString groupString;
+  QFile groupsFile(":pqWidgets/pqPresetGroups.json");
+
+  if (!groupsFile.open(QIODevice::ReadOnly))
+  {
+    qWarning() << "Could not load preset group list.";
+  }
+  else
+  {
+    groupString = groupsFile.readAll();
+  }
+  groupsFile.close();
+
+  presetGroupManager->loadGroups(groupString);
+  pqApplicationCore::instance()->registerManager("PRESET_GROUP_MANAGER", presetGroupManager);
+
   this->PythonManager = 0;
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   this->PythonManager = new pqPythonManager(this);
 
 // Ensure that whenever Python is initialized, we tell paraview.servermanager
@@ -89,7 +108,7 @@ pqPVApplicationCore::~pqPVApplicationCore()
 {
   delete this->AnimationManager;
   delete this->SelectionManager;
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   delete this->PythonManager;
 #endif
 }
@@ -106,7 +125,7 @@ void pqPVApplicationCore::registerForQuicklaunch(QWidget* menu)
 //-----------------------------------------------------------------------------
 void pqPVApplicationCore::quickLaunch()
 {
-  emit this->aboutToShowQuickLaunch();
+  Q_EMIT this->aboutToShowQuickLaunch();
   if (this->QuickLaunchMenus.size() > 0)
   {
     pqQuickLaunchDialog dialog(pqCoreUtilities::mainWidget());
@@ -177,7 +196,7 @@ pqAnimationManager* pqPVApplicationCore::animationManager() const
 //-----------------------------------------------------------------------------
 pqPythonManager* pqPVApplicationCore::pythonManager() const
 {
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   return this->PythonManager;
 #else
   return 0;
@@ -229,7 +248,7 @@ bool pqPVApplicationCore::eventFilter(QObject* obj, QEvent* event_)
 //-----------------------------------------------------------------------------
 void pqPVApplicationCore::loadStateFromPythonFile(const QString& filename, pqServer* server)
 {
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_ParaView_pqPython
   pqPythonManager* pythonMgr = this->pythonManager();
   this->clearViewsForLoadingState(server);
   // comment in pqApplicationCore says this->LoadingState is unreliable, but it is still

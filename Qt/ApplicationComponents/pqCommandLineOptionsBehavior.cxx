@@ -65,10 +65,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QDebug>
 #include <QFile>
 #include <QMainWindow>
+#include <QRegExp>
 #include <QString>
 #include <QStringList>
 
-#ifdef PARAVIEW_ENABLE_PYTHON
+#include <cassert>
+
+#if VTK_MODULE_ENABLE_VTK_PythonInterpreter
 #include "vtkPythonInterpreter.h"
 #endif
 
@@ -125,19 +128,7 @@ void pqCommandLineOptionsBehavior::processCommandLineOptions()
   // Now we are assured that some default server connection has been made
   // (either the one requested by the user on the command line or simply the
   // default one).
-  Q_ASSERT(pqActiveObjects::instance().activeServer() != 0);
-
-  // For tile display testing lets enable the dump of images
-  if (options->GetTileImagePath())
-  {
-    vtkSMProxy* proxy =
-      vtkSMProxyManager::GetProxyManager()->NewProxy("tile_helper", "TileDisplayHelper");
-    vtkSMStringVectorProperty* pathProperty =
-      vtkSMStringVectorProperty::SafeDownCast(proxy->GetProperty("DumpImagePath"));
-    pathProperty->SetElement(0, options->GetTileImagePath());
-    proxy->UpdateVTKObjects();
-    proxy->Delete();
-  }
+  assert(pqActiveObjects::instance().activeServer() != 0);
 
   // check for --data option.
   if (options->GetParaViewDataName())
@@ -183,7 +174,7 @@ void pqCommandLineOptionsBehavior::processCommandLineOptions()
 
   if (options->GetPythonScript())
   {
-#ifdef PARAVIEW_ENABLE_PYTHON
+#if VTK_MODULE_ENABLE_VTK_PythonInterpreter
     QFile file(options->GetPythonScript());
     if (file.open(QIODevice::ReadOnly))
     {
@@ -248,23 +239,32 @@ void pqCommandLineOptionsBehavior::playTests()
       }
     }
 
-    // Load the test plugin specified at the command line
-    std::string plugin(options->GetTestPlugin());
-    if (plugin.size())
+    // Load the test plugins specified at the command line
+    QString pluginsArg(options->GetTestPlugins());
+    if (pluginsArg.size())
     {
-      // Make in-code plugin XML
-      std::string plugin_xml;
-      plugin_xml += "<Plugins><Plugin name=\"";
-      plugin_xml += plugin;
-      plugin_xml += "\" auto_load=\"1\" /></Plugins>\n";
+      // RegEx for ','
+      QRegExp rx("(\\,)");
+      QStringList plugins = pluginsArg.split(rx);
 
-      // Load the plugin into the plugin manager. Local and remote
-      // loading is done here.
-      vtkSMProxyManager* pxm = vtkSMProxyManager::GetProxyManager();
-      vtkSMPluginManager* pluginManager = pxm->GetPluginManager();
-      vtkSMSession* activeSession = pxm->GetActiveSession();
-      pluginManager->LoadPluginConfigurationXMLFromString(plugin_xml.c_str(), activeSession, true);
-      pluginManager->LoadPluginConfigurationXMLFromString(plugin_xml.c_str(), activeSession, false);
+      for (const auto& plugin : plugins)
+      {
+        // Make in-code plugin XML
+        std::string plugin_xml;
+        plugin_xml += "<Plugins><Plugin name=\"";
+        plugin_xml += plugin.toStdString();
+        plugin_xml += "\" auto_load=\"1\" /></Plugins>\n";
+
+        // Load the plugin into the plugin manager. Local and remote
+        // loading is done here.
+        vtkSMProxyManager* pxm = vtkSMProxyManager::GetProxyManager();
+        vtkSMPluginManager* pluginManager = pxm->GetPluginManager();
+        vtkSMSession* activeSession = pxm->GetActiveSession();
+        pluginManager->LoadPluginConfigurationXMLFromString(
+          plugin_xml.c_str(), activeSession, true);
+        pluginManager->LoadPluginConfigurationXMLFromString(
+          plugin_xml.c_str(), activeSession, false);
+      }
     }
 
     // Play the test script if specified.

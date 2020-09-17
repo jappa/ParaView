@@ -33,8 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define pqView_h
 
 #include "pqProxy.h"
-#include "vtkSetGet.h" // needed for VTK_LEGACY.
-#include <QSize>       // needed for QSize.
+#include <QSize> // needed for QSize.
 
 class pqOutputPort;
 class pqPipelineSource;
@@ -100,11 +99,18 @@ public:
   virtual bool supportsUndo() const { return false; }
 
   /**
+  * Returns if this view module can support
+  * image capture. Returns false by default. Subclassess must override
+  * if that's not the case.
+  */
+  virtual bool supportsCapture() const { return false; }
+
+  /**
   * Returns the type of this view module.
   */
   QString getViewType() const { return this->ViewType; }
 
-public slots:
+public Q_SLOTS:
   /**
   * Request a StillRender on idle. Multiple calls are collapsed into one.
   */
@@ -195,7 +201,7 @@ public:
   */
   virtual void emitSelectionSignals(bool frustum);
 
-signals:
+Q_SIGNALS:
   /**
   * Fired when the vtkSMViewProxy fires the vtkCommand::UpdateDataEvent
   * The view proxy fires this event at the end of vtkSMViewProxy::Update()
@@ -291,7 +297,7 @@ signals:
   */
   void multipleSelected(QList<pqOutputPort*> opports);
 
-private slots:
+private Q_SLOTS:
   /**
   * Called when the "Representations" property changes.
   */

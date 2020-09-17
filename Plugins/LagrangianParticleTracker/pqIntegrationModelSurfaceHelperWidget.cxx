@@ -63,11 +63,6 @@ pqIntegrationModelSurfaceHelperWidget::pqIntegrationModelSurfaceHelperWidget(
 }
 
 //-----------------------------------------------------------------------------
-pqIntegrationModelSurfaceHelperWidget::~pqIntegrationModelSurfaceHelperWidget()
-{
-}
-
-//-----------------------------------------------------------------------------
 void pqIntegrationModelSurfaceHelperWidget::resetWidget()
 {
   this->resetSurfaceWidget(false);
@@ -85,7 +80,7 @@ void pqIntegrationModelSurfaceHelperWidget::resetSurfaceWidget(bool force)
     // Remove all previous layout and child widget
     qDeleteAll(this->children());
 
-    if (this->ModelPropertyValue != NULL)
+    if (this->ModelPropertyValue)
     {
       // Force push the model proxy property to the server
       this->ModelProperty->SetProxy(0, this->ModelPropertyValue);
@@ -169,11 +164,7 @@ void pqIntegrationModelSurfaceHelperWidget::resetSurfaceWidget(bool force)
         QStandardItemModel* model = new QStandardItemModel(nLeafs, nComponents);
         table->setModel(model);
         table->horizontalHeader()->setHighlightSections(false);
-#if QT_VERSION >= 0x050000
         table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-#else
-        table->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
-#endif
         table->horizontalHeader()->setStretchLastSection(true);
         table->horizontalHeader()->hide();
         QObject::connect(
@@ -234,7 +225,7 @@ void pqIntegrationModelSurfaceHelperWidget::resetSurfaceWidget(bool force)
         gridLayout->addWidget(gb, i, 0);
       }
     }
-    emit(this->arrayToGenerateChanged());
+    Q_EMIT(this->arrayToGenerateChanged());
   }
 }
 
@@ -307,7 +298,7 @@ QList<QVariant> pqIntegrationModelSurfaceHelperWidget::arrayToGenerate() const
             for (unsigned int j = 0; j < nComponents; j++)
             {
               QComboBox* cmb = qobject_cast<QComboBox*>(table->indexWidget(model->index(i, j)));
-              if (cmb != NULL)
+              if (cmb)
               {
                 str << cmb->itemData(cmb->currentIndex()).toString().toLatin1().data() << ";";
               }
@@ -347,7 +338,7 @@ void pqIntegrationModelSurfaceHelperWidget::setArrayToGenerate(const QList<QVari
 
     QString arrayName = i->toString();
     int type = (i + 1)->toInt();
-    gb = NULL;
+    gb = nullptr;
     foreach (gb, gbs)
     {
       if (arrayName == gb->property("name"))
@@ -355,7 +346,7 @@ void pqIntegrationModelSurfaceHelperWidget::setArrayToGenerate(const QList<QVari
         break;
       }
     }
-    if (gb == NULL)
+    if (!gb)
     {
       qCritical() << "Could not find group box with name" << arrayName;
       continue;
@@ -390,7 +381,7 @@ void pqIntegrationModelSurfaceHelperWidget::setArrayToGenerate(const QList<QVari
       for (int k = 0; k < nComponents; k++)
       {
         QComboBox* cmb = qobject_cast<QComboBox*>(table->indexWidget(model->index(j, k)));
-        if (cmb != NULL)
+        if (cmb)
         {
           cmb->setCurrentIndex(cmb->findData(dataValues[j * nComponents + k]));
         }

@@ -29,31 +29,6 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =========================================================================*/
-#ifndef pqPipelineModel_h
-#define pqPipelineModel_h
-
-#include "pqComponentsModule.h"
-
-#include "pqView.h"
-#include "vtkSmartPointer.h"
-#include <QAbstractItemModel>
-#include <QPointer>
-
-class pqDataRepresentation;
-class pqPipelineModelFilter;
-class pqPipelineModelInternal;
-class pqPipelineModelItem;
-class pqPipelineModelOutput;
-class pqPipelineModelSource;
-class pqPipelineSource;
-class pqView;
-class pqServer;
-class pqServerManagerModel;
-class pqServerManagerModelItem;
-class QFont;
-class QPixmap;
-class ModifiedLiveInsituLink;
-
 /**
 * \class pqPipelineModel
 * \brief
@@ -73,13 +48,27 @@ class ModifiedLiveInsituLink;
 * pipeline object.
 */
 
-class pqPipelineModelInternal;
-class pqServerManagerModelItem;
-class pqPipelineSource;
-class pqServer;
+#ifndef pqPipelineModel_h
+#define pqPipelineModel_h
+
+#include "pqComponentsModule.h" // For export macro
+#include "pqView.h"             // For View
+
+#include <QAbstractItemModel>
+#include <QMap>     // For PixmapMap
+#include <QPointer> // For View
+
+class ModifiedLiveInsituLink;
+class QFont;
 class QPixmap;
 class QString;
+class pqExtractGenerator;
 class pqPipelineModelDataItem;
+class pqPipelineModelInternal;
+class pqPipelineSource;
+class pqServer;
+class pqServerManagerModel;
+class pqServerManagerModelItem;
 class vtkSession;
 
 /**
@@ -102,6 +91,7 @@ public:
     Server = 0,
     Proxy,
     Port,
+    ExtractGenerator,
     Link
   };
 
@@ -317,6 +307,11 @@ public:
   void disableFilterAnnotationKey();
 
   /**
+   * Set wether annotation filter should display matching or non matching sources.
+   */
+  void setAnnotationFilterMatching(bool matching);
+
+  /**
   * \brief
   *   Store the session key that will be used when
   *   "this->data( ... , pqPipelineMode::SessionFilterRole)"
@@ -333,7 +328,7 @@ public:
   */
   void disableFilterSession();
 
-public slots:
+public Q_SLOTS:
   /**
   * Called when a new server connection is detected. Adds the connection to the
   * list.
@@ -367,6 +362,22 @@ public slots:
   */
   void removeConnection(pqPipelineSource* source, pqPipelineSource* sink, int);
 
+  //@{
+  /**
+   * Called to update extract generator connections.
+   */
+  void addConnection(pqServerManagerModelItem* source, pqExtractGenerator* sink);
+  void removeConnection(pqServerManagerModelItem* source, pqExtractGenerator* sink);
+  //@}
+
+  //@{
+  /**
+   * Add/remove extract generator.
+   */
+  void addExtractGenerator(pqExtractGenerator*);
+  void removeExtractGenerator(pqExtractGenerator*);
+  //@}
+
   /**
   * Updates the icons in the current window column.
   * The current window column shows whether or not the source is
@@ -375,10 +386,10 @@ public slots:
   */
   void setView(pqView* module);
 
-signals:
+Q_SIGNALS:
   void firstChildAdded(const QModelIndex& index);
 
-private slots:
+private Q_SLOTS:
   void onInsituConnectionInitiated(pqServer* server);
 
   void serverDataChanged();
@@ -430,11 +441,21 @@ private:
 
   QModelIndex getIndex(pqPipelineModelDataItem* item) const;
 
+  /**
+   * Check the PixmapMap contains a pixmap associated to the provided iconType.
+   * Return true if yes.
+   * If not it will try to load a new pixmap interpreting iconType as a Qt resource name
+   * and add it to the map.
+   * Return true if sucessful, false otherwise.
+   */
+  bool checkAndLoadPipelinePixmap(const QString& iconType);
+
 private:
   pqPipelineModelInternal* Internal; ///< Stores the pipeline representation.
-  QPixmap* PixmapList;               ///< Stores the item icons.
+  QMap<QString, QPixmap> PixmapMap;  ///< Stores the item icons.
   QPointer<pqView> View;
   bool Editable;
+  bool FilterAnnotationMatching;
   QString FilterRoleAnnotationKey;
   vtkSession* FilterRoleSession;
   ModifiedLiveInsituLink* LinkCallback;

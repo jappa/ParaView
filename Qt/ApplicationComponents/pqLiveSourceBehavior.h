@@ -59,7 +59,22 @@ public:
   pqLiveSourceBehavior(QObject* parent = 0);
   ~pqLiveSourceBehavior() override;
 
-protected slots:
+  /**
+   * Pause live updates.
+   */
+  static void pause();
+
+  /**
+   * Resume live updates.
+   */
+  static void resume();
+
+  /**
+   * Returns true if live updates are paused.
+   */
+  static bool isPaused() { return pqLiveSourceBehavior::PauseLiveUpdates; }
+
+protected Q_SLOTS:
   void viewAdded(pqView*);
   void sourceAdded(pqPipelineSource*);
   void timeout();
@@ -71,6 +86,8 @@ private:
 
   class pqInternals;
   QScopedPointer<pqInternals> Internals;
+
+  static bool PauseLiveUpdates;
 };
 
 #endif

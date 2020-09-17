@@ -93,7 +93,7 @@ def run(output_basename='log', num_spheres=8, num_spheres_in_scene=None,
 
     view = get_render_view(view_size)
     if ospray:
-        view.EnableOSPRay = 1
+        view.EnableRayTracing = 1
 
     print('Generating bounding box')
     import math
@@ -143,6 +143,8 @@ start=0
 for r in range(0,p):
     start += int(ns(r))
 end=start+ns(p)
+start = int(start)
+end = int(end)
 
 ss = vtkSphereSource()
 ss.SetPhiResolution(res)

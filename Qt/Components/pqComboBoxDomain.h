@@ -41,7 +41,7 @@ class vtkSMProperty;
 class vtkSMDomain;
 /**
 * combo box domain
-* observers the domain for a combo box and updates accordingly
+* observes the domain for a combo box and updates accordingly.
 * the list of values in the combo box is automatically
 * updated when the domain changes
 */
@@ -51,11 +51,11 @@ class PQCOMPONENTS_EXPORT pqComboBoxDomain : public QObject
 public:
   /**
   * constructor requires a QComboBox,
-  * and the property with the domain to observe
-  * optionally pass in a domainName if a specific one
+  * and the property with the domain to observe.
+  * optionally pass in a domain if a specific one
   * needs to be watched
   */
-  pqComboBoxDomain(QComboBox* p, vtkSMProperty* prop, const QString& domainName = QString());
+  pqComboBoxDomain(QComboBox* p, vtkSMProperty* prop, vtkSMDomain* domain = nullptr);
   ~pqComboBoxDomain() override;
 
   // explicitly trigger a domain change.
@@ -73,12 +73,11 @@ public:
 
   vtkSMProperty* getProperty() const;
   vtkSMDomain* getDomain() const;
-  const QString& getDomainName() const;
   const QStringList& getUserStrings() const;
 
-public slots:
+public Q_SLOTS:
   void domainChanged();
-protected slots:
+protected Q_SLOTS:
   virtual void internalDomainChanged();
 
 protected:

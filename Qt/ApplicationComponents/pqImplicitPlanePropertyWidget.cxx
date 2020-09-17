@@ -35,12 +35,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqPointPickingHelper.h"
 #include "pqRenderView.h"
 #include "vtkCamera.h"
+#include "vtkSMIntVectorProperty.h"
 #include "vtkSMNewWidgetRepresentationProxy.h"
 #include "vtkSMPropertyGroup.h"
 #include "vtkSMPropertyHelper.h"
 #include "vtkSMRenderViewProxy.h"
-
-#include <QDoubleValidator>
 
 namespace
 {
@@ -79,13 +78,6 @@ pqImplicitPlanePropertyWidget::pqImplicitPlanePropertyWidget(
 {
   Ui::ImplicitPlanePropertyWidget ui;
   ui.setupUi(this);
-  new QDoubleValidator(ui.originX);
-  new QDoubleValidator(ui.originY);
-  new QDoubleValidator(ui.originZ);
-  new QDoubleValidator(ui.normalX);
-  new QDoubleValidator(ui.normalY);
-  new QDoubleValidator(ui.normalZ);
-
   if (vtkSMProperty* origin = smgroup->GetProperty("Origin"))
   {
     this->addPropertyLink(ui.originX, "text2", SIGNAL(textChangedAndEditingFinished()), origin, 0);
@@ -120,6 +112,17 @@ pqImplicitPlanePropertyWidget::pqImplicitPlanePropertyWidget(
   else
   {
     qCritical("Missing required property for function 'Normal'.");
+  }
+
+  if (vtkSMIntVectorProperty* alwaysSnapToNearestAxis =
+        vtkSMIntVectorProperty::SafeDownCast(smgroup->GetProperty("AlwaysSnapToNearestAxis")))
+  {
+    if (alwaysSnapToNearestAxis->GetNumberOfElements())
+    {
+      vtkSMNewWidgetRepresentationProxy* wdgProxy = this->widgetProxy();
+      vtkSMPropertyHelper(wdgProxy, "AlwaysSnapToNearestAxis")
+        .Set(alwaysSnapToNearestAxis->GetElements()[0]);
+    }
   }
 
   // link a few buttons
@@ -217,7 +220,7 @@ void pqImplicitPlanePropertyWidget::resetToDataBounds()
     vtkSMPropertyHelper(wdgProxy, "WidgetBounds").Set(bounds, 6);
     wdgProxy->UpdateProperty("WidgetBounds", true);
     wdgProxy->UpdateVTKObjects();
-    emit this->changeAvailable();
+    Q_EMIT this->changeAvailable();
     this->render();
   }
 }
@@ -264,7 +267,7 @@ void pqImplicitPlanePropertyWidget::setNormal(double wx, double wy, double wz)
   double n[3] = { wx, wy, wz };
   vtkSMPropertyHelper(wdgProxy, "Normal").Set(n, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }
 
@@ -275,6 +278,6 @@ void pqImplicitPlanePropertyWidget::setOrigin(double wx, double wy, double wz)
   double o[3] = { wx, wy, wz };
   vtkSMPropertyHelper(wdgProxy, "Origin").Set(o, 3);
   wdgProxy->UpdateVTKObjects();
-  emit this->changeAvailable();
+  Q_EMIT this->changeAvailable();
   this->render();
 }

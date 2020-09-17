@@ -80,6 +80,12 @@ public:
   void disableAnnotationFilter();
 
   /**
+   * Choose wether Annotation filter should display matching or non-matching sources.
+   * Default is matching.
+   */
+  void setAnnotationFilterMatching(bool matching);
+
+  /**
   * Set Session filter to use
   */
   void enableSessionFilter(vtkSession* session);
@@ -111,21 +117,21 @@ public:
   */
   QMenu* contextMenu() const;
 
-signals:
+Q_SIGNALS:
   /**
   * Fired when the delete key is pressed.
   * Typically implies that the selected items need to be deleted.
   */
   void deleteKey();
 
-public slots:
+public Q_SLOTS:
   /**
   * Set the active view. By default connected to
   * pqActiveObjects::viewChanged() so it keeps track of the active view.
   */
   void setActiveView(pqView*);
 
-protected slots:
+protected Q_SLOTS:
   void handleIndexClicked(const QModelIndex& index);
   void expandWithModelIndexTranslation(const QModelIndex&);
 
@@ -136,6 +142,11 @@ protected:
   void setVisibility(bool visible, const QModelIndexList& indices);
 
   void contextMenuEvent(QContextMenuEvent* e) override;
+
+  /**
+   * Overridden to pass changed font to pqPipelineModel.
+   */
+  bool viewportEvent(QEvent* e) override;
 
   pqPipelineModel* PipelineModel;
   pqPipelineAnnotationFilterModel* FilteredPipelineModel;

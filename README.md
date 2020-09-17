@@ -27,7 +27,7 @@ Learning Resources
 
 * [The ParaView Guide][Guide] can be downloaded (as PDF) or purchased (in print).
 
-* Community discussion takes place on the [ParaView Mailing Lists][].
+* Community discussion takes place on the [ParaView Discourse][] forum.
 
 * Commercial [support][Kitware Support] and [training][Kitware Training]
   are available from [Kitware][].
@@ -37,7 +37,7 @@ Learning Resources
 
 [ParaView Homepage]: http://www.paraview.org
 [Documentation]: http://www.paraview.org/documentation/
-[ParaView Mailing Lists]: http://www.paraview.org/mailing-lists/
+[ParaView Discourse]: https://discourse.paraview.org/
 [Kitware]: http://www.kitware.com/
 [Kitware Support]: http://www.kitware.com/products/support.html
 [Kitware Training]: http://www.kitware.com/products/protraining.php
@@ -49,12 +49,14 @@ Building
 
 There are two ways to build ParaView:
 
-* Perhaps the easiest method for beginners to build ParaView from source is
-using the [ParaView Superbuild][sbrepo]. The superbuild downloads and builds all
-of ParaView's dependencies as well as ParaView itself.
+* The easiest method for begginners to build ParaView from source is
+by using our [Getting Started compilation guide][build] which includes
+commands to install the needed dependencies for most operating systems.
 
-* It is also possible to [build ParaView][build] without using the superbuild.
-ParaView's dependencies must be available on the system.
+* Another way to build ParaView, quite useful when trying to enable more specific
+options which requires to build dependencies yourself (ie osmesa, raytracing),
+would be the [ParaView Superbuild][sbrepo]. The superbuild downloads and builds all
+of ParaView's dependencies as well as ParaView itself.
 
 [sbrepo]: https://gitlab.kitware.com/paraview/paraview-superbuild
 [build]: Documentation/dev/build.md
@@ -66,14 +68,13 @@ If you have found a bug:
 
 1. If you have a source-code fix, please read the [CONTRIBUTING.md][] document.
 
-2. Otherwise, please join the one of the [ParaView Mailing Lists][] and ask
-   about the expected and observed behaviors to determine if it is
-   really a bug.
+2. Otherwise, please join the [ParaView Discourse][] forum and ask about
+   the expected and observed behaviors to determine if it is really a bug.
 
 3. Finally, if the issue is not resolved by the above steps, open
    an entry in the [ParaView Issue Tracker][].
 
-[ParaView Issue Tracker]: https://gitlab.kitware.com/paraview/paraview/issues
+[ParaView Issue Tracker]: https://gitlab.kitware.com/paraview/paraview/-/issues
 
 Contributing
 ============

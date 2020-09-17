@@ -225,8 +225,7 @@ pqIndexSelectionWidget::pqIndexSelectionWidget(
   , Form(new QFormLayout(this->GroupBox))
   , Internals(new pqInternals())
 {
-  vtkSMIndexSelectionDomain* domain =
-    vtkSMIndexSelectionDomain::SafeDownCast(pushProp->GetDomain("index_selection"));
+  auto domain = pushProp->FindDomain<vtkSMIndexSelectionDomain>();
   if (!domain)
   {
     qWarning() << "Missing domain for index_selection widget.";
@@ -408,7 +407,7 @@ void pqIndexSelectionWidget::updatePropertyImpl()
   this->IgnorePushPropertyUpdates = true;
   this->setProperty(this->PushPropertyName.constData(), newProp);
   this->IgnorePushPropertyUpdates = false;
-  emit widgetModified();
+  Q_EMIT widgetModified();
 }
 
 //------------------------------------------------------------------------------

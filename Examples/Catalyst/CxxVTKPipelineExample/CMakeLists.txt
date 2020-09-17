@@ -1,42 +1,58 @@
-cmake_minimum_required(VERSION 3.3)
-project(CatalystCxxVTKPipelineExample)
+set(mpi_definitions
+  MPICH_SKIP_MPICXX
+  OMPI_SKIP_MPICXX)
 
-set(USE_CATALYST ON CACHE BOOL "Link the simulator with Catalyst")
-if(USE_CATALYST)
-  # We have a C++ pipeline so we don't need to link with Python
-  # or vtkPVPythonCatalyst since vtkPVCatalyst is sufficient.
-  find_package(ParaView 4.1 REQUIRED COMPONENTS vtkPVCatalyst vtkPVVTKExtensionsDefault vtkPVClientServerCoreCore)
-  include("${PARAVIEW_USE_FILE}")
-  set(Adaptor_SRCS
+if (USE_CATALYST)
+  add_library(CxxVTKPipelineExampleAdaptor
     FEAdaptor.cxx
+    FEAdaptor.h
+    FEDataStructures.cxx
+    FEDataStructures.h
     vtkCPVTKPipeline.cxx
-    )
-  add_library(CxxVTKPipelineExampleAdaptor ${Adaptor_SRCS})
-  target_link_libraries(CxxVTKPipelineExampleAdaptor vtkPVCatalyst vtkPVVTKExtensionsDefault vtkPVClientServerCoreCore)
-  add_definitions("-DUSE_CATALYST")
-  if(NOT PARAVIEW_USE_MPI)
-    message(SEND_ERROR "ParaView must be built with MPI enabled")
-  endif()
-else()
-  find_package(MPI REQUIRED)
-  include_directories(${MPI_CXX_INCLUDE_PATH})
-endif()
+    vtkCPVTKPipeline.h)
+  target_link_libraries(CxxVTKPipelineExampleAdaptor
+    PRIVATE
+      ParaView::Catalyst
+      ParaView::RemotingServerManager
+      ParaView::VTKExtensionsCore
+      ParaView::VTKExtensionsFiltersGeneral
+      ParaView::VTKExtensionsMisc
+      VTK::CommonDataModel
+      VTK::IOParallelXML
+      VTK::ParallelCore
+      MPI::MPI_C)
+  target_compile_definitions(CxxVTKPipelineExampleAdaptor
+    PUBLIC
+      ${mpi_definitions})
+  if (TARGET VTK::PythonUsed)
+    target_link_libraries(CxxVTKPipelineExampleAdaptor
+      INTERFACE
+        VTK::PythonUsed)
+  endif ()
+endif ()
 
+if (TARGET CxxVTKPipelineExampleAdaptor)
+  add_executable(CxxVTKPipelineExample
+    FEDriver.cxx)
+  target_link_libraries(CxxVTKPipelineExample
+    PRIVATE
+      CxxVTKPipelineExampleAdaptor
+      VTK::mpi
+      VTK::CommonCore)
+else ()
+  add_executable(CxxVTKPipelineExample
+    FEDriver.cxx
+    FEDataStructures.cxx
+    FEDataStructures.h)
+  target_link_libraries(CxxVTKPipelineExample
+    PRIVATE
+      MPI::MPI_C
+      VTK::CommonCore)
+  target_compile_definitions(CxxVTKPipelineExample
+    PUBLIC
+      ${mpi_definitions})
+endif ()
 
-add_executable(CxxVTKPipelineExample FEDriver.cxx FEDataStructures.cxx)
-if(USE_CATALYST)
-  target_link_libraries(CxxVTKPipelineExample LINK_PRIVATE CxxVTKPipelineExampleAdaptor)
-  include(vtkModuleMacros)
-  include(vtkMPI)
-  vtk_mpi_link(CxxVTKPipelineExample)
-else()
-  target_link_libraries(CxxVTKPipelineExample LINK_PRIVATE ${MPI_LIBRARIES})
-endif()
-
-option(BUILD_TESTING "Build Testing" OFF)
-# Setup testing.
 if (BUILD_TESTING)
-  include(CTest)
   add_test(NAME CxxVTKPipelineExampleTest COMMAND CxxVTKPipelineExample 10 output)
-  set_tests_properties(CxxVTKPipelineExampleTest PROPERTIES LABELS "PARAVIEW;CATALYST")
 endif()

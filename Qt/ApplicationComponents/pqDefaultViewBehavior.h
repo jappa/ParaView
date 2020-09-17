@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QObject>
 #include <QPointer>
 
+#include "pqTimer.h" // for pqTimer
 #include "vtkType.h" // for vtkTypeUInt32.
 
 class pqServer;
@@ -54,7 +55,7 @@ class PQAPPLICATIONCOMPONENTS_EXPORT pqDefaultViewBehavior : public QObject
 public:
   pqDefaultViewBehavior(QObject* parent = 0);
 
-protected slots:
+protected Q_SLOTS:
   void onServerCreation(pqServer*);
   void fiveMinuteTimeoutWarning();
   void finalTimeoutWarning();
@@ -67,6 +68,7 @@ private:
   vtkTypeUInt32 ServerCapabilities;
   vtkTypeUInt32 ClientCapabilities;
   QPointer<pqServer> Server;
+  pqTimer WarningsTimer;
 };
 
 #endif

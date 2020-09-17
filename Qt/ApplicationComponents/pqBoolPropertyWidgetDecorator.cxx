@@ -38,6 +38,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMProxy.h"
 #include "vtkSMUncheckedPropertyHelper.h"
 
+#include <cassert>
+
 //-----------------------------------------------------------------------------
 pqBoolPropertyWidgetDecorator::pqBoolPropertyWidgetDecorator(
   vtkPVXMLElement* config, pqPropertyWidget* parentObject)
@@ -47,7 +49,7 @@ pqBoolPropertyWidgetDecorator::pqBoolPropertyWidgetDecorator(
   , BoolProperty(true)
 {
   vtkSMProxy* proxy = this->parentWidget()->proxy();
-  Q_ASSERT(proxy != NULL);
+  assert(proxy != NULL);
 
   for (unsigned int cc = 0; cc < config->GetNumberOfNestedElements(); cc++)
   {
@@ -57,16 +59,21 @@ pqBoolPropertyWidgetDecorator::pqBoolPropertyWidgetDecorator(
     {
       const char* name = child->GetAttribute("name");
       const char* function = child->GetAttributeOrDefault("function", "boolean");
+      const char* value = child->GetAttribute("value");
+
       int index = atoi(child->GetAttributeOrDefault("index", "0"));
-      if (strcmp(function, "boolean") != 0 && strcmp(function, "boolean_invert") != 0)
+      if (strcmp(function, "boolean") != 0 && strcmp(function, "boolean_invert") != 0 &&
+        strcmp(function, "greaterthan") != 0 && strcmp(function, "lessthan") != 0 &&
+        strcmp(function, "equals") != 0 && strcmp(function, "contains") != 0)
       {
         qDebug("pqBoolPropertyWidgetDecorator currently only "
-               "supports 'boolean' and 'boolean_invert'.");
+               "supports 'boolean', 'boolean_invert', 'greaterthan', "
+               "'lessthan', 'equals' and 'contains'.");
       }
-
       this->Property = proxy->GetProperty(name);
       this->Index = index;
       this->Function = function;
+      this->Value = value;
 
       if (!this->Property)
       {
@@ -108,6 +115,30 @@ void pqBoolPropertyWidgetDecorator::updateBoolPropertyState()
     bool enabled = vtkSMUncheckedPropertyHelper(this->Property).GetAsInt(this->Index) != 0;
     this->setBoolProperty(!enabled);
   }
+  if (this->Property && this->Function == "greaterthan")
+  {
+    double number = this->Value.toDouble();
+    bool enabled = vtkSMUncheckedPropertyHelper(this->Property).GetAsDouble(this->Index) > number;
+    this->setBoolProperty(enabled);
+  }
+  if (this->Property && this->Function == "lessthan")
+  {
+    double number = this->Value.toDouble();
+    bool enabled = vtkSMUncheckedPropertyHelper(this->Property).GetAsDouble(this->Index) < number;
+    this->setBoolProperty(enabled);
+  }
+  if (this->Property && this->Function == "equals")
+  {
+    bool enabled =
+      this->Value == vtkSMUncheckedPropertyHelper(this->Property).GetAsString(this->Index);
+    this->setBoolProperty(enabled);
+  }
+  if (this->Property && this->Function == "contains")
+  {
+    bool enabled = QString(vtkSMUncheckedPropertyHelper(this->Property).GetAsString(this->Index))
+                     .contains(this->Value);
+    this->setBoolProperty(enabled);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -116,6 +147,6 @@ void pqBoolPropertyWidgetDecorator::setBoolProperty(bool val)
   if (this->BoolProperty != val)
   {
     this->BoolProperty = val;
-    emit this->boolPropertyChanged();
+    Q_EMIT this->boolPropertyChanged();
   }
 }

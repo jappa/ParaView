@@ -36,9 +36,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Qt includes
 #include <QHeaderView>
+#include <QIcon>
 #include <QLineEdit>
 #include <QStackedWidget>
 #include <QStringList>
+#include <QTabBar>
 
 // VTK includes
 #include "vtkCommand.h"
@@ -50,13 +52,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkPVCompositeDataInformation.h"
 #include "vtkPVDataInformation.h"
 #include "vtkPVDataSetAttributesInformation.h"
+#include "vtkPVLogger.h"
 #include "vtkSMDomain.h"
 #include "vtkSMDomainIterator.h"
 #include "vtkSMDoubleVectorProperty.h"
 #include "vtkSMOutputPort.h"
 #include "vtkSMPropertyIterator.h"
 #include "vtkSmartPointer.h"
-#include "vtkTimerLog.h"
 
 #include "vtkPVGeneralSettings.h"
 
@@ -66,6 +68,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqActiveObjects.h"
 #include "pqCompositeDataInformationTreeModel.h"
 #include "pqCoreUtilities.h"
+#include "pqDataAssemblyTreeModel.h"
 #include "pqNonEditableStyledItemDelegate.h"
 #include "pqObjectBuilder.h"
 #include "pqOutputPort.h"
@@ -81,11 +84,12 @@ class pqProxyInformationWidget::pqUi : public Ui::pqProxyInformationWidget
 public:
   pqUi(QObject* p)
     : compositeTreeModel(new pqCompositeDataInformationTreeModel(p))
+    , assemblyTreeModel(new pqDataAssemblyTreeModel(p))
   {
-    this->compositeTreeModel->setHeaderData(0, Qt::Horizontal, "Data Hierarchy");
   }
 
   QPointer<pqCompositeDataInformationTreeModel> compositeTreeModel;
+  QPointer<pqDataAssemblyTreeModel> assemblyTreeModel;
 };
 
 //-----------------------------------------------------------------------------
@@ -96,11 +100,14 @@ pqProxyInformationWidget::pqProxyInformationWidget(QWidget* p)
   this->VTKConnect = vtkEventQtSlotConnect::New();
   this->Ui = new pqUi(this);
   this->Ui->setupUi(this);
-  this->Ui->compositeTree->setModel(this->Ui->compositeTreeModel);
+  this->Ui->dataArrays->setItemDelegate(new pqNonEditableStyledItemDelegate(this));
+  this->Ui->timeValues->setItemDelegate(new pqNonEditableStyledItemDelegate(this));
   this->Ui->compositeTree->setItemDelegate(new pqNonEditableStyledItemDelegate(this));
+  this->Ui->compositeTree->setModel(this->Ui->compositeTreeModel);
   this->connect(this->Ui->compositeTree->selectionModel(),
     SIGNAL(currentChanged(const QModelIndex&, const QModelIndex&)),
     SLOT(onCurrentChanged(const QModelIndex&)));
+  this->Ui->assemblyTree->setModel(this->Ui->assemblyTreeModel);
   this->connect(this->Ui->dataTypeProperties, SIGNAL(currentChanged(int)),
     SLOT(onDataTypePropertiesWidgetChanged(int)));
   this->onDataTypePropertiesWidgetChanged(0); // set initial size
@@ -157,11 +164,8 @@ pqOutputPort* pqProxyInformationWidget::getOutputPort()
 //-----------------------------------------------------------------------------
 void pqProxyInformationWidget::updateInformation()
 {
-  vtkTimerLogScope mark("pqProxyInformationWidget::updateInformation");
-  (void)mark;
-
   this->Ui->compositeTreeModel->reset(nullptr);
-  this->Ui->compositeTree->setVisible(false);
+  this->Ui->hierarchyTabWidget->setVisible(false);
   this->Ui->filename->setText(tr("NA"));
   this->Ui->filename->setToolTip(tr("NA"));
   this->Ui->filename->setStatusTip(tr("NA"));
@@ -171,27 +175,45 @@ void pqProxyInformationWidget::updateInformation()
 
   vtkPVDataInformation* dataInformation = NULL;
   pqPipelineSource* source = NULL;
+  vtkDataAssembly* assembly = nullptr;
   if (this->OutputPort)
   {
     source = this->OutputPort->getSource();
     if (this->OutputPort->getOutputPortProxy())
     {
       dataInformation = this->OutputPort->getDataInformation();
+      assembly = this->OutputPort->dataAssembly();
     }
   }
 
   if (!source || !dataInformation)
   {
+    vtkVLogF(PARAVIEW_LOG_APPLICATION_VERBOSITY(), "update-information-panel (nullptr)");
     this->fillDataInformation(0);
     return;
   }
 
+  vtkVLogScopeF(PARAVIEW_LOG_APPLICATION_VERBOSITY(), "update-information-panel for `%s`",
+    source->getProxy()->GetLogNameOrDefault());
+
   if (this->Ui->compositeTreeModel->reset(dataInformation))
   {
-    this->Ui->compositeTree->setVisible(true);
+    this->Ui->hierarchyTabWidget->setVisible(true);
     this->Ui->compositeTree->expandToDepth(1);
     this->Ui->compositeTree->selectionModel()->setCurrentIndex(
       this->Ui->compositeTreeModel->rootIndex(), QItemSelectionModel::ClearAndSelect);
+    this->Ui->assemblyTreeModel->setDataAssembly(assembly);
+    this->Ui->assemblyTree->expandToDepth(1);
+
+    if (assembly == nullptr)
+    {
+      this->Ui->hierarchyTabWidget->setCurrentIndex(0);
+      this->Ui->hierarchyTabWidget->tabBar()->hide();
+    }
+    else
+    {
+      this->Ui->hierarchyTabWidget->tabBar()->show();
+    }
   }
 
   this->fillDataInformation(dataInformation);
@@ -242,7 +264,6 @@ void pqProxyInformationWidget::updateInformation()
   vtkSMDoubleVectorProperty* tsv =
     vtkSMDoubleVectorProperty::SafeDownCast(source->getProxy()->GetProperty("TimestepValues"));
   this->Ui->timeValues->clear();
-  this->Ui->timeValues->setItemDelegate(new pqNonEditableStyledItemDelegate(this));
   //
   QAbstractItemModel* pModel = this->Ui->timeValues->model();
   pModel->blockSignals(true);
@@ -281,6 +302,8 @@ void pqProxyInformationWidget::fillDataInformation(vtkPVDataInformation* dataInf
   this->Ui->numberOfTrees->setText(tr("NA"));
   this->Ui->numberOfVertices->setText(tr("NA"));
   this->Ui->numberOfLeaves->setText(tr("NA"));
+  this->Ui->numberOfGraphVertices->setText(tr("NA"));
+  this->Ui->numberOfGraphEdges->setText(tr("NA"));
   this->Ui->memory->setText(tr("NA"));
 
   this->Ui->dataArrays->clear();
@@ -323,6 +346,11 @@ void pqProxyInformationWidget::fillDataInformation(vtkPVDataInformation* dataInf
   QString numLeaves = QString("%1").arg(dataInformation->GetNumberOfLeaves());
   this->Ui->numberOfLeaves->setText(numLeaves);
 
+  this->Ui->numberOfGraphVertices->setText(numVertices);
+
+  QString numBonds = QString("%1").arg(dataInformation->GetNumberOfEdges());
+  this->Ui->numberOfGraphEdges->setText(numBonds);
+
   switch (dataInformation->GetDataSetType())
   {
     case VTK_TABLE:
@@ -333,6 +361,19 @@ void pqProxyInformationWidget::fillDataInformation(vtkPVDataInformation* dataInf
       this->Ui->dataTypeProperties->setCurrentWidget(this->Ui->HyperTreeGrid);
       break;
 
+    case VTK_DIRECTED_GRAPH:
+    case VTK_UNDIRECTED_GRAPH:
+    case VTK_GRAPH:
+      this->Ui->graphVertexLabel->setText("Number of Vertices");
+      this->Ui->graphEdgeLabel->setText("Number of Edges");
+      this->Ui->dataTypeProperties->setCurrentWidget(this->Ui->Graph);
+      break;
+
+    case VTK_MOLECULE:
+      this->Ui->graphVertexLabel->setText("Number of Atoms");
+      this->Ui->graphEdgeLabel->setText("Number of Bonds");
+      this->Ui->dataTypeProperties->setCurrentWidget(this->Ui->Graph);
+      break;
     default:
       this->Ui->dataTypeProperties->setCurrentWidget(this->Ui->DataSet);
       break;
@@ -363,10 +404,10 @@ void pqProxyInformationWidget::fillDataInformation(vtkPVDataInformation* dataInf
   info[4] = dataInformation->GetRowDataInformation();
   info[5] = dataInformation->GetFieldDataInformation();
 
-  QPixmap pixmaps[6] = { QPixmap(":/pqWidgets/Icons/pqPointData16.png"),
-    QPixmap(":/pqWidgets/Icons/pqCellData16.png"), QPixmap(":/pqWidgets/Icons/pqPointData16.png"),
-    QPixmap(":/pqWidgets/Icons/pqCellData16.png"), QPixmap(":/pqWidgets/Icons/pqSpreadsheet16.png"),
-    QPixmap(":/pqWidgets/Icons/pqGlobalData16.png") };
+  QIcon pixmaps[6] = { QIcon(":/pqWidgets/Icons/pqPointData.svg"),
+    QIcon(":/pqWidgets/Icons/pqCellData.svg"), QIcon(":/pqWidgets/Icons/pqPointData.svg"),
+    QIcon(":/pqWidgets/Icons/pqCellData.svg"), QIcon(":/pqWidgets/Icons/pqSpreadsheet.svg"),
+    QIcon(":/pqWidgets/Icons/pqGlobalData.svg") };
 
   if (dataInformation->IsDataStructured())
   {
@@ -439,7 +480,6 @@ void pqProxyInformationWidget::fillDataInformation(vtkPVDataInformation* dataInf
     }
   }
   this->Ui->dataArrays->header()->resizeSections(QHeaderView::ResizeToContents);
-  this->Ui->dataArrays->setItemDelegate(new pqNonEditableStyledItemDelegate(this));
 
   double bounds[6];
   dataInformation->GetBounds(bounds);

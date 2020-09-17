@@ -72,12 +72,6 @@ public:
     this->Table->setCornerButtonEnabled(false);
     this->Table->setSelectionBehavior(QAbstractItemView::SelectRows);
     this->Table->setSelectionModel(&this->SelectionModel);
-#if QT_VERSION >= 0x050000
-    this->Table->horizontalHeader()->setSectionsMovable(true);
-#else
-    this->Table->horizontalHeader()->setMovable(true);
-#endif
-    this->SingleColumnMode = false;
 
     // Do not show the sorting arrow as default
     this->Table->setSortingEnabled(false);
@@ -93,8 +87,6 @@ public:
   // We use EmptySelectionModel as the selection model for the view when in
   // SelectionOnly mode i.e. when we showing only the selected elements.
   QItemSelectionModel EmptySelectionModel;
-
-  bool SingleColumnMode;
 };
 
 //-----------------------------------------------------------------------------
@@ -168,7 +160,7 @@ void pqSpreadSheetView::updateRepresentationVisibility(pqRepresentation* repr, b
   if (!visible && repr && this->Internal->Model->activeRepresentation() == repr)
   {
     this->Internal->Model->setActiveRepresentation(NULL);
-    emit this->showing(0);
+    Q_EMIT this->showing(0);
   }
 
   if (!visible || !repr)
@@ -178,7 +170,7 @@ void pqSpreadSheetView::updateRepresentationVisibility(pqRepresentation* repr, b
 
   pqDataRepresentation* dataRepr = qobject_cast<pqDataRepresentation*>(repr);
   this->Internal->Model->setActiveRepresentation(dataRepr);
-  emit this->showing(dataRepr);
+  Q_EMIT this->showing(dataRepr);
 }
 
 //-----------------------------------------------------------------------------
@@ -199,7 +191,7 @@ void pqSpreadSheetView::onEndRender()
   // this->Internal->Model.forceUpdate();
   // this->Internal->Model->update();
   this->Internal->Table->viewport()->update();
-  emit this->viewportUpdated();
+  Q_EMIT this->viewportUpdated();
 }
 
 //-----------------------------------------------------------------------------
@@ -218,11 +210,11 @@ void pqSpreadSheetView::onCreateSelection(vtkSMSourceProxy* selSource)
     {
       input->SetSelectionInput(opport->getPortNumber(), selSource, 0);
     }
-    emit this->selected(opport);
+    Q_EMIT this->selected(opport);
   }
   else
   {
-    emit this->selected(0);
+    Q_EMIT this->selected(0);
   }
 }
 

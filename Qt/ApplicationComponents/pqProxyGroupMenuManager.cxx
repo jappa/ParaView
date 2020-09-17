@@ -32,9 +32,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pqProxyGroupMenuManager.h"
 
 #include "pqActiveObjects.h"
-#include "pqAddToBookmarksReaction.h"
+#include "pqAddToFavoritesReaction.h"
 #include "pqCoreUtilities.h"
-#include "pqManageBookmarksReaction.h"
+#include "pqManageFavoritesReaction.h"
 #include "pqPVApplicationCore.h"
 #include "pqServerManagerModel.h"
 #include "pqSetData.h"
@@ -58,6 +58,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QSet>
 #include <QStringList>
 #include <QtDebug>
+
+#include <algorithm>
 
 class pqProxyGroupMenuManager::pqInternal
 {
@@ -121,9 +123,9 @@ public:
   ProxyInfoMap Proxies;
   CategoryInfoMap Categories;
   QList<QPair<QString, QString> > RecentlyUsed;
-  // list of bookmarks. Each pair is {filterGroup, filterPath} where filterPath
-  // is the category path to access the bookmark: category1;category2;...;filterName
-  QList<QPair<QString, QString> > Bookmarks;
+  // list of favorites. Each pair is {filterGroup, filterPath} where filterPath
+  // is the category path to access the favorite: category1;category2;...;filterName
+  QList<QPair<QString, QString> > Favorites;
   QSet<QString> ProxyDefinitionGroupToListen;
   QSet<unsigned long> CallBackIDs;
   QWidget Widget;
@@ -132,7 +134,7 @@ public:
   void* LocalActiveSession;
 
   QPointer<QMenu> RecentMenu;
-  QPointer<QMenu> BookmarksMenu;
+  QPointer<QMenu> FavoritesMenu;
 };
 
 //-----------------------------------------------------------------------------
@@ -145,7 +147,7 @@ pqProxyGroupMenuManager::pqProxyGroupMenuManager(
   this->Internal = new pqInternal();
   this->RecentlyUsedMenuSize = 0;
   this->Enabled = true;
-  this->EnableBookmarks = false;
+  this->EnableFavorites = false;
 
   QObject::connect(pqApplicationCore::instance(), SIGNAL(loadXML(vtkPVXMLElement*)), this,
     SLOT(loadConfiguration(vtkPVXMLElement*)));
@@ -389,22 +391,22 @@ void pqProxyGroupMenuManager::saveRecentlyUsedItems()
 }
 
 //-----------------------------------------------------------------------------
-void pqProxyGroupMenuManager::populateBookmarksMenu()
+void pqProxyGroupMenuManager::populateFavoritesMenu()
 {
-  this->loadBookmarksItems();
-  if (this->Internal->BookmarksMenu)
+  this->loadFavoritesItems();
+  if (this->Internal->FavoritesMenu)
   {
-    this->Internal->BookmarksMenu->clear();
+    this->Internal->FavoritesMenu->clear();
 
-    QAction* manageBookmarksAction =
-      this->Internal->BookmarksMenu->addAction("&Manage Bookmarks...")
-      << pqSetName("actionManage_Bookmarks");
-    new pqManageBookmarksReaction(manageBookmarksAction, this);
+    QAction* manageFavoritesAction =
+      this->Internal->FavoritesMenu->addAction("&Manage Favorites...")
+      << pqSetName("actionManage_Favorites");
+    new pqManageFavoritesReaction(manageFavoritesAction, this);
 
-    this->Internal->BookmarksMenu->addAction(this->getAddToCategoryAction(QString()));
-    this->Internal->BookmarksMenu->addSeparator();
+    this->Internal->FavoritesMenu->addAction(this->getAddToCategoryAction(QString()));
+    this->Internal->FavoritesMenu->addSeparator();
 
-    for (const QPair<QString, QString>& key : this->Internal->Bookmarks)
+    for (const QPair<QString, QString>& key : this->Internal->Favorites)
     {
       QStringList categories = key.second.split(";", QString::SkipEmptyParts);
       bool isCategory = key.first.compare("categories") == 0;
@@ -414,7 +416,7 @@ void pqProxyGroupMenuManager::populateBookmarksMenu()
         categories.removeLast();
       }
 
-      QMenu* submenu = this->Internal->BookmarksMenu;
+      QMenu* submenu = this->Internal->FavoritesMenu;
       for (const QString& category : categories)
       {
         bool submenuExists = false;
@@ -437,8 +439,8 @@ void pqProxyGroupMenuManager::populateBookmarksMenu()
         }
       }
 
-      // if bookmark does not exist (e.g. filter from an unloaded plugin)
-      // no action will be created. (but bookmark stays in memory)
+      // if favorite does not exist (e.g. filter from an unloaded plugin)
+      // no action will be created. (but favorite stays in memory)
       auto action = isCategory ? nullptr : this->getAction(key.first, filter);
       if (action)
       {
@@ -452,15 +454,15 @@ void pqProxyGroupMenuManager::populateBookmarksMenu()
 //-----------------------------------------------------------------------------
 QAction* pqProxyGroupMenuManager::getAddToCategoryAction(const QString& path)
 {
-  QAction* actionAddToBookmarks = new QAction(this);
-  actionAddToBookmarks->setObjectName(QString("actionAddTo:%1").arg(path));
-  actionAddToBookmarks->setText(
+  QAction* actionAddToFavorites = new QAction(this);
+  actionAddToFavorites->setObjectName(QString("actionAddTo:%1").arg(path));
+  actionAddToFavorites->setText(
     QApplication::translate("pqPipelineBrowserContextMenu", "&Add current filter", Q_NULLPTR));
-  actionAddToBookmarks->setData(path);
+  actionAddToFavorites->setData(path);
 
   // get filters list for current category
   QVector<QString> filters;
-  for (const QPair<QString, QString>& key : this->Internal->Bookmarks)
+  for (const QPair<QString, QString>& key : this->Internal->Favorites)
   {
     if (key.first == "filters")
     {
@@ -474,17 +476,17 @@ QAction* pqProxyGroupMenuManager::getAddToCategoryAction(const QString& path)
     }
   }
 
-  new pqAddToBookmarksReaction(actionAddToBookmarks, filters);
+  new pqAddToFavoritesReaction(actionAddToFavorites, filters);
 
-  return actionAddToBookmarks;
+  return actionAddToFavorites;
 }
 
 //-----------------------------------------------------------------------------
-void pqProxyGroupMenuManager::loadBookmarksItems()
+void pqProxyGroupMenuManager::loadFavoritesItems()
 {
-  this->Internal->Bookmarks.clear();
+  this->Internal->Favorites.clear();
   pqSettings* settings = pqApplicationCore::instance()->settings();
-  QString key = QString("bookmarks.%1/").arg(this->ResourceTagName);
+  QString key = QString("favorites.%1/").arg(this->ResourceTagName);
   if (settings->contains(key))
   {
     QString list = settings->value(key).toString();
@@ -497,7 +499,7 @@ void pqProxyGroupMenuManager::loadBookmarksItems()
         QString group = pieces.takeFirst();
         QString path = pieces.join(";");
         QPair<QString, QString> aKey(group, path);
-        this->Internal->Bookmarks.push_back(aKey);
+        this->Internal->Favorites.push_back(aKey);
       }
     }
   }
@@ -506,9 +508,9 @@ void pqProxyGroupMenuManager::loadBookmarksItems()
 }
 
 //-----------------------------------------------------------------------------
-QMenu* pqProxyGroupMenuManager::getBookmarksMenu()
+QMenu* pqProxyGroupMenuManager::getFavoritesMenu()
 {
-  return this->Internal->BookmarksMenu;
+  return this->Internal->FavoritesMenu;
 }
 
 //-----------------------------------------------------------------------------
@@ -566,11 +568,11 @@ void pqProxyGroupMenuManager::populateMenu()
     this->connect(rmenu, SIGNAL(aboutToShow()), SLOT(populateRecentlyUsedMenu()));
   }
 
-  if (this->EnableBookmarks)
+  if (this->EnableFavorites)
   {
-    auto* bmenu = _menu->addMenu("&Bookmarks") << pqSetName("Bookmarks");
-    this->Internal->BookmarksMenu = bmenu;
-    this->connect(_menu, SIGNAL(aboutToShow()), SLOT(populateBookmarksMenu()));
+    auto* bmenu = _menu->addMenu("&Favorites") << pqSetName("Favorites");
+    this->Internal->FavoritesMenu = bmenu;
+    this->connect(_menu, SIGNAL(aboutToShow()), SLOT(populateFavoritesMenu()));
   }
 
   _menu->addSeparator();
@@ -595,7 +597,7 @@ void pqProxyGroupMenuManager::populateMenu()
   }
 
   // Now sort all actions added in temp based on their texts.
-  qSort(someActions.begin(), someActions.end(), ::actionTextSort);
+  std::sort(someActions.begin(), someActions.end(), ::actionTextSort);
   foreach (QAction* action, someActions)
   {
     alphabeticalMenu->addAction(action);
@@ -617,7 +619,7 @@ void pqProxyGroupMenuManager::populateMenu()
     }
   }
 
-  emit this->menuPopulated();
+  Q_EMIT this->menuPopulated();
 }
 
 //-----------------------------------------------------------------------------
@@ -634,7 +636,7 @@ void pqProxyGroupMenuManager::updateMenuStyle()
     action->setFont(f);
   }
 
-  for (auto bm : this->Internal->Bookmarks)
+  for (auto bm : this->Internal->Favorites)
   {
     QStringList path = bm.second.split(";", QString::SkipEmptyParts);
     QString filter = path.takeLast();
@@ -683,6 +685,17 @@ QAction* pqProxyGroupMenuManager::getAction(const QString& pgroup, const QString
       QStringList data_list;
       data_list << pgroup << pname;
       action << pqSetName(name) << pqSetData(data_list);
+      pqSettings settings;
+      if (pgroup == "filters" || pgroup == "sources")
+      {
+        QString menuName = pgroup == "filters" ? "Filters" : "Sources";
+        auto variant = settings.value(
+          QString("pqCustomShortcuts/%1/Alphabetical/%2").arg(menuName, label), QVariant());
+        if (variant.canConvert<QKeySequence>())
+        {
+          action->setShortcut(variant.value<QKeySequence>());
+        }
+      }
       if (iter.value().OmitFromToolbar.size() > 0)
       {
         action->setProperty("OmitFromToolbar", iter.value().OmitFromToolbar);
@@ -728,7 +741,7 @@ void pqProxyGroupMenuManager::triggered()
     return;
   }
   QPair<QString, QString> key(data_list[0], data_list[1]);
-  emit this->triggered(key.first, key.second);
+  Q_EMIT this->triggered(key.first, key.second);
   if (this->RecentlyUsedMenuSize > 0)
   {
     this->Internal->RecentlyUsed.removeAll(key);
@@ -838,7 +851,7 @@ QList<QAction*> pqProxyGroupMenuManager::actions(const QString& category)
   {
     // sort unless the XML overrode the sorting using the "preserve_order"
     // attribute.
-    qSort(category_actions.begin(), category_actions.end(), ::actionTextSort);
+    std::sort(category_actions.begin(), category_actions.end(), ::actionTextSort);
   }
   return category_actions;
 }

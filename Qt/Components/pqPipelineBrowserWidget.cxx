@@ -49,6 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtkSMPVRepresentationProxy.h"
 #include "vtkSMParaViewPipelineControllerWithRendering.h"
 #include "vtkSMPropertyHelper.h"
+#include "vtkSMScalarBarWidgetRepresentationProxy.h"
 #include "vtkSMTransferFunctionManager.h"
 #include "vtkSMViewProxy.h"
 
@@ -56,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QKeyEvent>
 #include <QMenu>
 
-#include <assert.h>
+#include <cassert>
 
 //-----------------------------------------------------------------------------
 pqPipelineBrowserWidget::pqPipelineBrowserWidget(QWidget* parentObject)
@@ -117,6 +118,17 @@ void pqPipelineBrowserWidget::configureModel()
   QObject::connect(smModel, SIGNAL(connectionRemoved(pqPipelineSource*, pqPipelineSource*, int)),
     this->PipelineModel, SLOT(removeConnection(pqPipelineSource*, pqPipelineSource*, int)));
 
+  // monitor extract generator related signals.
+  QObject::connect(smModel, SIGNAL(extractGeneratorAdded(pqExtractGenerator*)), this->PipelineModel,
+    SLOT(addExtractGenerator(pqExtractGenerator*)));
+  QObject::connect(smModel, SIGNAL(extractGeneratorRemoved(pqExtractGenerator*)),
+    this->PipelineModel, SLOT(removeExtractGenerator(pqExtractGenerator*)));
+  QObject::connect(smModel, SIGNAL(connectionAdded(pqServerManagerModelItem*, pqExtractGenerator*)),
+    this->PipelineModel, SLOT(addConnection(pqServerManagerModelItem*, pqExtractGenerator*)));
+  QObject::connect(smModel,
+    SIGNAL(connectionRemoved(pqServerManagerModelItem*, pqExtractGenerator*)), this->PipelineModel,
+    SLOT(removeConnection(pqServerManagerModelItem*, pqExtractGenerator*)));
+
   // Use the tree view's font as the base for the model's modified
   // font.
   QFont modifiedFont = this->font();
@@ -143,11 +155,25 @@ bool pqPipelineBrowserWidget::eventFilter(QObject* object, QEvent* eventArg)
     QKeyEvent* keyEvent = static_cast<QKeyEvent*>(eventArg);
     if (keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace)
     {
-      emit this->deleteKey();
+      Q_EMIT this->deleteKey();
     }
   }
 
   return this->Superclass::eventFilter(object, eventArg);
+}
+
+//----------------------------------------------------------------------------
+bool pqPipelineBrowserWidget::viewportEvent(QEvent* evt)
+{
+  if (evt->type() == QEvent::FontChange)
+  {
+    // Pass the changed font to the model otherwise it doesn't use
+    // correct font for modified items.
+    QFont modifiedFont = this->font();
+    modifiedFont.setBold(true);
+    this->PipelineModel->setModifiedFont(modifiedFont);
+  }
+  return this->Superclass::viewportEvent(evt);
 }
 
 //----------------------------------------------------------------------------
@@ -282,8 +308,9 @@ void pqPipelineBrowserWidget::setVisibility(bool visible, pqOutputPort* port)
 {
   if (port)
   {
+    auto& activeObjects = pqActiveObjects::instance();
     vtkNew<vtkSMParaViewPipelineControllerWithRendering> controller;
-    pqView* activeView = pqActiveObjects::instance().activeView();
+    pqView* activeView = activeObjects.activeView();
     vtkSMViewProxy* viewProxy = activeView ? activeView->getViewProxy() : NULL;
     int scalarBarMode = vtkPVGeneralSettings::GetInstance()->GetScalarBarMode();
 
@@ -306,18 +333,54 @@ void pqPipelineBrowserWidget::setVisibility(bool visible, pqOutputPort* port)
       {
         // Make sure the given port is selected specially if we are in
         // multi-server / catalyst configuration type
-        pqActiveObjects::instance().setActivePort(port);
+        activeObjects.setActivePort(port);
       }
+
+      auto activeLayout = activeObjects.activeLayout();
+      const auto location = activeObjects.activeLayoutLocation();
+
       vtkSMProxy* repr = controller->SetVisibility(
         port->getSourceProxy(), port->getPortNumber(), viewProxy, visible);
+      if (visible && viewProxy == nullptr && repr)
+      {
+        // this implies that the controller would have created a new view.
+        // let's get that view so we toggle scalar bar visibility in that view
+        // and also add it to layout.
+        viewProxy = vtkSMViewProxy::FindView(repr);
+        controller->AssignViewToLayout(viewProxy, activeLayout, location);
+      }
+
+      // assign to layout, in case a new view is created.
       // update scalar bars: show new ones if needed. Hiding of scalar bars is
       // taken care of by vtkSMParaViewPipelineControllerWithRendering (I still
       // wonder if that's the best thing to do).
-      if (repr && visible &&
-        scalarBarMode == vtkPVGeneralSettings::AUTOMATICALLY_SHOW_AND_HIDE_SCALAR_BARS &&
-        vtkSMPVRepresentationProxy::GetUsingScalarColoring(repr))
+      if (scalarBarMode != vtkPVGeneralSettings::MANUAL_SCALAR_BARS)
       {
-        vtkSMPVRepresentationProxy::SetScalarBarVisibility(repr, viewProxy, true);
+        // This gets executed if scalar bar mode is
+        // AUTOMATICALLY_HIDE_SCALAR_BARS or AUTOMATICALLY_SHOW_AND_HIDE_SCALAR_BARS
+        vtkSMPVRepresentationProxy* PVRepr = vtkSMPVRepresentationProxy::SafeDownCast(repr);
+        if (visible && PVRepr && vtkSMPVRepresentationProxy::GetUsingScalarColoring(repr))
+        {
+          int stickyVisible = PVRepr->IsScalarBarStickyVisible(viewProxy);
+          if (stickyVisible != -1)
+          {
+            PVRepr->SetScalarBarVisibility(viewProxy, stickyVisible);
+          }
+          else if (scalarBarMode == vtkPVGeneralSettings::AUTOMATICALLY_SHOW_AND_HIDE_SCALAR_BARS)
+          {
+            PVRepr->SetScalarBarVisibility(viewProxy, true);
+          }
+          else if (scalarBarMode == vtkPVGeneralSettings::AUTOMATICALLY_HIDE_SCALAR_BARS)
+          {
+            PVRepr->SetScalarBarVisibility(viewProxy, false);
+          }
+          else
+          {
+            std::cerr << "You might have added a new scalar bar mode, you need to do something "
+                         "here, skipping"
+                      << std::endl;
+          }
+        }
       }
     }
   }
@@ -327,6 +390,12 @@ void pqPipelineBrowserWidget::setVisibility(bool visible, pqOutputPort* port)
 QMenu* pqPipelineBrowserWidget::contextMenu() const
 {
   return this->ContextMenu;
+}
+
+//----------------------------------------------------------------------------
+void pqPipelineBrowserWidget::setAnnotationFilterMatching(bool matching)
+{
+  this->FilteredPipelineModel->setAnnotationFilterMatching(matching);
 }
 
 //----------------------------------------------------------------------------

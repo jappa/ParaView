@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class vtkSMTransferFunctionProxy;
 class vtkEventQtSlotConnect;
 class vtkSMRangedTransferFunctionDomain;
+class pqTransferFunctionWidgetPropertyDialog;
 
 /**
 * A property widget for editing a transfer function.
@@ -55,27 +56,37 @@ public:
     vtkSMProxy* proxy, vtkSMProperty* property, QWidget* parent = 0);
   ~pqTransferFunctionWidgetPropertyWidget() override;
 
-  const double* getRange() { return this->Range; };
-  void setRange(const double& min, const double& max);
+  friend pqTransferFunctionWidgetPropertyDialog;
 
-signals:
+Q_SIGNALS:
   void domainChanged();
 
 protected:
   void UpdateProperty();
 
-protected slots:
-  void buttonClicked();
-  void updateRange();
+protected Q_SLOTS:
+  void editButtonClicked();
   void propagateProxyPointsProperty();
-  void onDomainChanged();
+  void resetRangeToDomainDefault();
+
+  /**
+   * Update widget with transfer function proxy value.
+   */
+  void updateRange();
+
+  /**
+   * Update transfer function proxy from widgets.
+   */
+  void onRangeEdited();
 
 private:
   vtkEventQtSlotConnect* Connection;
   vtkSMTransferFunctionProxy* TFProxy;
   QDialog* Dialog;
   vtkSMRangedTransferFunctionDomain* Domain;
-  double Range[2];
+
+  class pqInternals;
+  const QScopedPointer<pqInternals> Internals;
 };
 
 #endif // _pqTransferFunctionWidgetPropertyWidget_h

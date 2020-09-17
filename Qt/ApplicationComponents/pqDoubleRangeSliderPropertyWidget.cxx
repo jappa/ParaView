@@ -63,7 +63,6 @@ pqDoubleRangeSliderPropertyWidget::pqDoubleRangeSliderPropertyWidget(
   Ui::DoubleRangeSliderPropertyWidget& ui = this->Internals->Ui;
   ui.setupUi(this);
 
-  ui.Reset->setIcon(ui.Reset->style()->standardIcon(QStyle::SP_BrowserReload));
   ui.gridLayout->setMargin(pqPropertiesPanel::suggestedMargin());
   ui.gridLayout->setVerticalSpacing(pqPropertiesPanel::suggestedVerticalSpacing());
   ui.gridLayout->setHorizontalSpacing(pqPropertiesPanel::suggestedHorizontalSpacing());
@@ -125,8 +124,8 @@ void pqDoubleRangeSliderPropertyWidget::resetClicked()
   smproperty->ResetToDomainDefaults(/*use_unchecked_values*/ true);
 
   this->highlightResetButton(false);
-  emit this->changeAvailable();
-  emit this->changeFinished();
+  Q_EMIT this->changeAvailable();
+  Q_EMIT this->changeFinished();
 }
 
 //-----------------------------------------------------------------------------
@@ -138,7 +137,7 @@ void pqDoubleRangeSliderPropertyWidget::lowerChanged(double val)
     this->Internals->Ui.ThresholdBetween_1->setValue(val);
   }
 
-  emit this->changeFinished();
+  Q_EMIT this->changeFinished();
 }
 
 //-----------------------------------------------------------------------------
@@ -150,5 +149,5 @@ void pqDoubleRangeSliderPropertyWidget::upperChanged(double val)
     this->Internals->Ui.ThresholdBetween_0->setValue(val);
   }
 
-  emit this->changeFinished();
+  Q_EMIT this->changeFinished();
 }

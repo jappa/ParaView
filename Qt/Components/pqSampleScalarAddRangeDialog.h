@@ -29,18 +29,23 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =========================================================================*/
-
-#ifndef _pqSampleScalarAddRangeDialog_h
-#define _pqSampleScalarAddRangeDialog_h
+#ifndef pqSampleScalarAddRangeDialog_h
+#define pqSampleScalarAddRangeDialog_h
 
 #include "pqComponentsModule.h"
+#include "vtkSetGet.h" // for VTK_LEGACY_REMOVE
 
+#if !defined(VTK_LEGACY_REMOVE)
 #include <QDialog>
 #include <QVariant>
 
 /**
-* Provides a dialog for specifying a range of scalar samples, used
-* by pqSampleScalarWidget
+ * @class pqSampleScalarAddRangeDialog
+ *
+ * @deprecated in ParaView 5.8. Use `pqSeriesGeneratorDialog` instead.
+ *
+ * Provides a dialog for specifying a range of scalar samples, used
+ * by pqSampleScalarWidget
 */
 class PQCOMPONENTS_EXPORT pqSampleScalarAddRangeDialog : public QDialog
 {
@@ -66,7 +71,7 @@ public:
   bool isLogRangeStrict() const;
   QVariantList getRange() const;
 
-private slots:
+private Q_SLOTS:
   void onRangeChanged();
 
 private:
@@ -77,4 +82,5 @@ private:
   pqImplementation* const Implementation;
 };
 
+#endif // !defined(VTK_LEGACY_REMOVE)
 #endif // !_pqSampleScalarAddRangeDialog_h

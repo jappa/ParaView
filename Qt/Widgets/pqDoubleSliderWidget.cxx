@@ -14,12 +14,12 @@
 =========================================================================*/
 #include "pqDoubleSliderWidget.h"
 
-#include "vtkPVConfig.h"
-
 // Qt includes
 #include <QDoubleValidator>
 #include <QHBoxLayout>
 #include <QSlider>
+
+#define DEFAULT_DOUBLE_PRECISION_VALUE 16
 
 pqDoubleSliderWidget::pqDoubleSliderWidget(QWidget* parent)
   : QWidget(parent)
@@ -38,13 +38,13 @@ pqDoubleSliderWidget::pqDoubleSliderWidget(QWidget* parent)
   this->DoubleLineEdit = new pqDoubleLineEdit(this);
   l->addWidget(this->DoubleLineEdit);
   this->DoubleLineEdit->setObjectName("DoubleLineEdit");
-  this->DoubleLineEdit->setFullPrecisionText(QString().setNum(this->Value));
+  this->DoubleLineEdit->setText(QString().setNum(this->Value));
 
   QObject::connect(this->Slider, SIGNAL(valueChanged(int)), this, SLOT(sliderChanged(int)));
-  QObject::connect(this->DoubleLineEdit, SIGNAL(fullPrecisionTextChanged(const QString&)), this,
+  QObject::connect(this->DoubleLineEdit, SIGNAL(textChanged(const QString&)), this,
     SLOT(textChanged(const QString&)));
-  QObject::connect(this->DoubleLineEdit, SIGNAL(fullPrecisionTextChangedAndEditingFinished()), this,
-    SLOT(editingFinished()));
+  QObject::connect(
+    this->DoubleLineEdit, SIGNAL(textChangedAndEditingFinished()), this, SLOT(editingFinished()));
 
   // let's avoid firing `valueChanged` events until the user has released the
   // slider.
@@ -80,12 +80,11 @@ void pqDoubleSliderWidget::setValue(double val)
 
     // set the text
     this->BlockUpdate = true;
-    this->DoubleLineEdit->setFullPrecisionText(
-      QString().setNum(val, 'g', DEFAULT_DOUBLE_PRECISION_VALUE));
+    this->DoubleLineEdit->setText(QString().setNum(val, 'g', DEFAULT_DOUBLE_PRECISION_VALUE));
     this->BlockUpdate = false;
   }
 
-  emit this->valueChanged(this->Value);
+  Q_EMIT this->valueChanged(this->Value);
 }
 
 //-----------------------------------------------------------------------------
@@ -107,7 +106,7 @@ void pqDoubleSliderWidget::sliderChanged(int val)
   {
     double v = this->sliderPosToValue(val);
     this->BlockUpdate = true;
-    this->DoubleLineEdit->setFullPrecisionText(QString().setNum(v));
+    this->DoubleLineEdit->setText(QString().setNum(v));
     this->setValue(v);
     this->emitValueEdited();
     this->BlockUpdate = false;
@@ -137,13 +136,13 @@ void pqDoubleSliderWidget::editingFinished()
 //-----------------------------------------------------------------------------
 void pqDoubleSliderWidget::setValidator(QDoubleValidator* validator)
 {
-  this->DoubleLineEdit->setDoubleValidator(validator);
+  this->DoubleLineEdit->setValidator(validator);
 }
 
 //-----------------------------------------------------------------------------
 const QDoubleValidator* pqDoubleSliderWidget::validator() const
 {
-  return this->DoubleLineEdit->doubleValidator();
+  return qobject_cast<const QDoubleValidator*>(this->DoubleLineEdit->validator());
 }
 
 //-----------------------------------------------------------------------------
@@ -180,7 +179,7 @@ void pqDoubleSliderWidget::emitValueEdited()
 {
   if (this->InteractingWithSlider == false)
   {
-    emit this->valueEdited(this->Value);
+    Q_EMIT this->valueEdited(this->Value);
   }
   else
   {
@@ -223,13 +222,13 @@ void pqDoubleSliderWidget::setPrecision(int _precision)
 }
 
 //-----------------------------------------------------------------------------
-bool pqDoubleSliderWidget::widgetSettingsApplicationManaged() const
+bool pqDoubleSliderWidget::useGlobalPrecisionAndNotation() const
 {
-  return this->DoubleLineEdit->widgetSettingsApplicationManaged();
+  return this->DoubleLineEdit->useGlobalPrecisionAndNotation();
 }
 
 //-----------------------------------------------------------------------------
-void pqDoubleSliderWidget::setWidgetSettingsApplicationManaged(bool value)
+void pqDoubleSliderWidget::setUseGlobalPrecisionAndNotation(bool val)
 {
-  this->DoubleLineEdit->setWidgetSettingsApplicationManaged(value);
+  this->DoubleLineEdit->setUseGlobalPrecisionAndNotation(val);
 }

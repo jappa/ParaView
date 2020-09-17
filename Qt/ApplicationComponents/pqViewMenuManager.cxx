@@ -42,12 +42,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QMenu>
 #include <QToolBar>
 
+#include <algorithm>
+#include <cassert>
+
 //-----------------------------------------------------------------------------
 pqViewMenuManager::pqViewMenuManager(QMainWindow* mainWindow, QMenu* menu)
   : Superclass(mainWindow)
 {
-  Q_ASSERT(mainWindow != NULL);
-  Q_ASSERT(menu != NULL);
+  assert(mainWindow != NULL);
+  assert(menu != NULL);
 
   this->Menu = menu;
   this->Window = mainWindow;
@@ -60,14 +63,21 @@ pqViewMenuManager::pqViewMenuManager(QMainWindow* mainWindow, QMenu* menu)
 
 namespace
 {
+QString trimShortcut(QString s)
+{
+  return s.remove('&');
+}
+
 bool toolbarLessThan(const QToolBar* tb1, const QToolBar* tb2)
 {
-  return tb1->toggleViewAction()->text() < tb2->toggleViewAction()->text();
+  return trimShortcut(tb1->toggleViewAction()->text()) <
+    trimShortcut(tb2->toggleViewAction()->text());
 }
 
 bool dockWidgetLessThan(const QDockWidget* tb1, const QDockWidget* tb2)
 {
-  return tb1->toggleViewAction()->text() < tb2->toggleViewAction()->text();
+  return trimShortcut(tb1->toggleViewAction()->text()) <
+    trimShortcut(tb2->toggleViewAction()->text());
 }
 }
 
@@ -78,7 +88,8 @@ void pqViewMenuManager::buildMenu()
   this->Menu->clear();
 
   // Add invariant items to the menu.
-  this->ToolbarsMenu = this->Menu->addMenu("Toolbars") << pqSetName("Toolbars");
+  this->ToolbarsMenu = this->Menu->addMenu(QIcon(":/pqWidgets/Icons/pqToolbar.svg"), "Toolbars")
+    << pqSetName("Toolbars");
   this->DockPanelSeparators[0] = this->Menu->addSeparator();
   this->DockPanelSeparators[1] = this->Menu->addSeparator();
 
@@ -91,15 +102,27 @@ void pqViewMenuManager::buildMenu()
     pqApplicationCore::instance()->manager("MULTIVIEW_WIDGET"));
   if (viewManager)
   {
-    new pqPreviewMenuManager((this->Menu->addMenu("Preview") << pqSetName("Preview")));
+    new pqPreviewMenuManager(
+      (this->Menu->addMenu(QIcon(":/pqWidgets/Icons/pqPreview.svg"), "Preview")
+        << pqSetName("Preview")));
 
-    QAction* fullscreen = this->Menu->addAction("Full Screen");
+    QAction* fullscreen =
+      this->Menu->addAction(QIcon(":/pqWidgets/Icons/pqFullscreen.svg"), "Full Screen");
     fullscreen->setObjectName("actionFullScreen");
     fullscreen->setShortcut(QKeySequence("F11"));
-    QObject::connect(fullscreen, SIGNAL(triggered()), viewManager, SLOT(toggleFullScreen()));
+    QObject::connect(
+      fullscreen, &QAction::triggered, viewManager, &pqTabbedMultiViewWidget::toggleFullScreen);
+
+    auto showDecorations = this->Menu->addAction("Show Frame Decorations");
+    showDecorations->setCheckable(true);
+    showDecorations->setChecked(viewManager->decorationsVisibility());
+    QObject::connect(showDecorations, &QAction::triggered, viewManager,
+      &pqTabbedMultiViewWidget::setDecorationsVisibility);
+    this->ShowFrameDecorationsAction = showDecorations;
   }
 
-  QAction* lockDockWidgetsAction = this->Menu->addAction("Toggle Lock Panels");
+  QAction* lockDockWidgetsAction =
+    this->Menu->addAction(QIcon(":/pqWidgets/Icons/pqToggleLock.svg"), "Toggle Lock Panels");
   lockDockWidgetsAction->setObjectName("actionLockDockWidgets");
   lockDockWidgetsAction->setToolTip("Toggle locking of dockable panels so they\
     cannot be moved");
@@ -110,11 +133,11 @@ void pqViewMenuManager::buildMenu()
 void pqViewMenuManager::updateMenu()
 {
   // update invariants only.
-  Q_ASSERT(this->ToolbarsMenu);
+  assert(this->ToolbarsMenu);
 
   this->ToolbarsMenu->clear();
   QList<QToolBar*> all_toolbars = this->Window->findChildren<QToolBar*>();
-  qSort(all_toolbars.begin(), all_toolbars.end(), toolbarLessThan);
+  std::sort(all_toolbars.begin(), all_toolbars.end(), toolbarLessThan);
 
   foreach (QToolBar* toolbar, all_toolbars)
   {
@@ -126,22 +149,29 @@ void pqViewMenuManager::updateMenu()
     }
   }
 
-  Q_ASSERT(this->DockPanelSeparators[0] && this->DockPanelSeparators[1]);
+  assert(this->DockPanelSeparators[0] && this->DockPanelSeparators[1]);
   // remove all dock panel actions and add them back in.
   QList<QAction*> acts = this->Menu->actions();
   int start = acts.indexOf(this->DockPanelSeparators[0]);
   int end = acts.indexOf(this->DockPanelSeparators[1]);
-  Q_ASSERT(start != -1 && end != -1);
+  assert(start != -1 && end != -1);
   for (int cc = start + 1; cc < end; ++cc)
   {
     this->Menu->removeAction(acts[cc]);
   }
 
   QList<QDockWidget*> all_docks = this->Window->findChildren<QDockWidget*>();
-  qSort(all_docks.begin(), all_docks.end(), dockWidgetLessThan);
+  std::sort(all_docks.begin(), all_docks.end(), dockWidgetLessThan);
   foreach (QDockWidget* dock_widget, all_docks)
   {
     this->Menu->insertAction(
       /*before*/ this->DockPanelSeparators[1], dock_widget->toggleViewAction());
+  }
+
+  pqTabbedMultiViewWidget* viewManager = qobject_cast<pqTabbedMultiViewWidget*>(
+    pqApplicationCore::instance()->manager("MULTIVIEW_WIDGET"));
+  if (viewManager && this->ShowFrameDecorationsAction)
+  {
+    this->ShowFrameDecorationsAction->setChecked(viewManager->decorationsVisibility());
   }
 }

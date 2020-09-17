@@ -50,17 +50,17 @@ class pqIntegrationModelSurfaceHelperWidget : public pqIntegrationModelHelperWid
 public:
   pqIntegrationModelSurfaceHelperWidget(
     vtkSMProxy* smproxy, vtkSMProperty* smproperty, QWidget* parentObject = 0);
-  ~pqIntegrationModelSurfaceHelperWidget() override;
+  ~pqIntegrationModelSurfaceHelperWidget() override = default;
 
   QList<QVariant> arrayToGenerate() const;
 
-public slots:
+public Q_SLOTS:
   void setArrayToGenerate(const QList<QVariant>&);
 
-signals:
+Q_SIGNALS:
   void arrayToGenerateChanged();
 
-protected slots:
+protected Q_SLOTS:
   /// Create/Reset the widget
   void resetWidget() override;
 

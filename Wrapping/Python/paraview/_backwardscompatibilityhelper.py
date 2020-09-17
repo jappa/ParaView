@@ -132,7 +132,7 @@ def setattr(proxy, pname, value):
     if pname == "LockScalarRange" and proxy.SMProxy.GetProperty("AutomaticRescaleRangeMode"):
         if paraview.compatibility.GetVersion() <= 5.4:
             if value:
-                from vtkmodules.vtkPVServerManagerRendering import vtkSMTransferFunctionManager
+                from paraview.modules.vtkRemotingViews import vtkSMTransferFunctionManager
                 proxy.GetProperty("AutomaticRescaleRangeMode").SetData(vtkSMTransferFunctionManager.NEVER)
             else:
                 pxm = proxy.SMProxy.GetSessionProxyManager()
@@ -189,7 +189,7 @@ def setattr(proxy, pname, value):
                 raise Continue()
             else:
                 raise NotSupportedException("'%s' is obsolete. Use the `Blocks` "\
-                        "property to select blocks using SIL instead.")
+                        "property to select blocks using SIL instead." % pname)
 
     if pname == "DataBoundsInflateFactor" and proxy.SMProxy.GetProperty("DataBoundsScaleFactor"):
         if paraview.compatibility.GetVersion() <= 5.4:
@@ -256,6 +256,80 @@ def setattr(proxy, pname, value):
             raise NotSupportedException(
                   "'%s' is obsolete on SpreadSheetRepresentation as of ParaView 5.6 and has been migrated to the view." % pname)
 
+    # In 5.7, we changed to the names of the input proxies in ResampleWithDataset to clarify what
+    # each source does.
+    if pname == "Input" and proxy.SMProxy.GetXMLName() == "ResampleWithDataset":
+        if paraview.compatibility.GetVersion() < 5.7:
+            proxy.GetProperty("SourceDataArrays").SetData(value)
+            raise Continue()
+        else:
+            raise NotSupportedException(
+                'The ResampleWithDataset.Input property has been changed in ParaView 5.7. '\
+                'Please set the SourceDataArrays property instead.')
+
+    if pname == "Source" and proxy.SMProxy.GetXMLName() == "ResampleWithDataset":
+        if paraview.compatibility.GetVersion() < 5.7:
+            proxy.GetProperty("DestinationMesh").SetData(value)
+            raise Continue()
+        else:
+            raise NotSupportedException(
+                'The ResampleWithDataset.Source property has been changed in ParaView 5.7. '\
+                'Please set the DestinationMesh property instead.')
+
+    # In 5.7, we removed `ArrayName` property on the `GenerateIdScalars` filter
+    # and replaced it with `CellIdsArrayName` and `PointIdsArrayName`.
+    if pname == "ArrayName" and proxy.SMProxy.GetXMLName() == "GenerateIdScalars":
+        if paraview.compatibility.GetVersion() < 5.7:
+            proxy.GetProperty("PointIdsArrayName").SetData(value)
+            proxy.GetProperty("CellIdsArrayName").SetData(value)
+            raise Continue()
+        else:
+            raise NotSupportedException(
+                'The GenerateIdScalars.ArrayName property has been removed in ParaView 5.7. '\
+                'Please set `PointIdsArrayName` or `CellIdsArrayName` property instead.')
+
+    # In 5.7, we renamed the 3D View's ray tracing interface from OSPRay to RayTracing
+    if pname == "EnableOSPRay" and proxy.SMProxy.IsA("vtkSMRenderViewProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("EnableRayTracing").SetData(value)
+        else:
+            raise NotSupportedException(
+                'The `EnableOSPRay` control has been renamed in ParaView 5.7 to `EnableRayTracing`.')
+    if pname == "OSPRayRenderer" and proxy.SMProxy.IsA("vtkSMRenderViewProxy"):
+        newvalue = "OSPRay raycaster"
+        if value == "pathtracer":
+            newvalue = "OSPRay pathtracer"
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("BackEnd").SetData(newvalue)
+        else:
+            raise NotSupportedException(
+                'The `OSPRayRenderer` control has been renamed in ParaView 5.7 to `BackEnd` and '\
+                'the settings `scivis` and `pathtracer` have been renamed to `OSPRay scivis` '\
+                'and `OSPRay pathtracer` respectively.')
+    if pname == "OSPRayTemporalCacheSize" and proxy.SMProxy.IsA("vtkSMRenderViewProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("TemporalCacheSize").SetData(value)
+        else:
+            raise NotSupportedException(
+                'The `OSPRayTemporalCacheSize` control has been renamed in ParaView 5.7 to `TemporalCacheSize`.')
+    if pname == "OSPRayUseScaleArray" and proxy.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("UseScaleArray").SetData(value)
+        else:
+            raise NotSupportedException(
+                'The `OSPRayUseScaleArray` control has been renamed in ParaView 5.7 to `UseScaleArray`.')
+    if pname == "OSPRayScaleFunction" and proxy.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("ScaleFunction").SetData(value)
+        else:
+            raise NotSupportedException(
+                'The `OSPRayScaleFunction` control has been renamed in ParaView 5.7 to `ScaleFunction`.')
+    if pname == "OSPRayMaterial" and proxy.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("Material").SetData(value)
+        else:
+            raise NotSupportedException(
+                'The `OSPRayMaterial` control has been renamed in ParaView 5.7 to `Material`.')
 
     if not hasattr(proxy, pname):
         raise AttributeError()
@@ -274,6 +348,38 @@ def setattr_fix_value(proxy, pname, value, setter_func):
             else:
                 raise NotSupportedException("'Gaussian Blur (Default)' is an obsolete value for ShaderPreset. "\
                     " Use 'Gaussian Blur' instead.")
+
+    if pname == "FieldAssociation" and proxy.SMProxy.GetXMLName() in ["DataSetCSVWriter", "CSVWriter"]:
+        if paraview.compatibility.GetVersion() < 5.8:
+            if value == "Points":
+                value = "Point Data"
+            elif value == "Cells":
+                value = "Cell Data"
+            setter_func(proxy, value)
+            raise Continue()
+        else:
+            raise NotSupportedException("'FieldAssociation' is using an obsolete "\
+                    "value '%s', use `Point Data` or `Cell Data` instead." % value)
+
+    # In 5.9, we changed "High Resolution Line Source" to "Line" and "Point Source" to
+    # "Point Cloud"
+    seed_sources_from = ["High Resolution Line Source", "Point Source"]
+    seed_sources_to = ["Line", "Point Cloud"]
+    seed_sources_proxyname = ["HighResLineSource", "PointSource"]
+    if value in seed_sources_from and proxy.GetProperty(pname).SMProperty.IsA("vtkSMInputProperty"):
+        domain = proxy.GetProperty(pname).SMProperty.FindDomain("vtkSMProxyListDomain")
+        for i in range(len(seed_sources_to)):
+            if value == seed_sources_from[i]:
+                domain_proxy = domain.FindProxy("extended_sources", seed_sources_proxyname[i])
+                if domain_proxy:
+                    if paraview.compatibility.GetVersion() < 5.9:
+                        value = seed_sources_to[i]
+                        setter_func(proxy, value)
+                        raise Continue()
+                    else:
+                        raise NotSupportedException("%s is an obsolete value. Use %s instead." % (seed_sources_from[i], seed_sources_to[i]))
+
+    # Always keep this line last
     raise ValueError("'%s' is not a valid value for %s!" % (value, pname))
 
 _fgetattr = getattr
@@ -358,7 +464,7 @@ def getattr(proxy, pname):
     # replaced it with the enumeration AutomaticRescaleRangeMode.
     if pname == "LockScalarRange" and proxy.SMProxy.GetProperty("AutomaticRescaleRangeMode"):
         if version <= 5.4:
-            from vtkmodules.vtkPVServerManagerRendering import vtkSMTransferFunctionManager
+            from paraview.modules.vtkRemotingViews import vtkSMTransferFunctionManager
             if proxy.GetProperty("AutomaticRescaleRangeMode").GetData() == "Never":
                 return 1
             else:
@@ -460,7 +566,7 @@ def getattr(proxy, pname):
 
     # In 5.5, we changed the Clip to be inverted from what it was before and changed the InsideOut
     # property to be called Invert to be clearer.
-    if pname == "InsideOut" and proxy.SMProxy.GetName() == "Clip":
+    if pname == "InsideOut" and proxy.SMProxy.GetXMLName() == "Clip":
         if paraview.compatibility.GetVersion() <= 5.4:
             return proxy.GetProperty("Invert").GetData()
         else:
@@ -477,23 +583,100 @@ def getattr(proxy, pname):
         else:
             raise NotSupportedException(
                   "'%s' is obsolete on SpreadSheetRepresentation as of ParaView 5.6 and has been migrated to the view." % pname)
+
+    # In 5.7, we changed to the names of the input proxies in ResampleWithDataset to clarify what
+    # each source does.
+    if pname == "Input" and proxy.SMProxy.GetXMLName() == "ResampleWithDataset":
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("SourceDataArrays")
+        else:
+            raise NotSupportedException(
+                'The ResampleWithDataset.Input property has been changed in ParaView 5.7. '\
+                'Please access the SourceDataArrays property instead.')
+
+    if pname == "Source" and proxy.SMProxy.GetXMLName() == "ResampleWithDataset":
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("DestinationMesh")
+        else:
+            raise NotSupportedException(
+                'The ResampleWithDataset.Source property has been changed in ParaView 5.7. '\
+                'Please access the DestinationMesh property instead.')
+
+    # In 5.7, we removed `ArrayName` property on the `GenerateIdScalars` filter
+    # and replaced it with `CellIdsArrayName` and `PointIdsArrayName`.
+    if pname == "ArrayName" and proxy.SMProxy.GetXMLName() == "GenerateIdScalars":
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("PointIdsArrayName")
+        else:
+            raise NotSupportedException(
+                'The GenerateIdScalars.ArrayName property has been removed in ParaView 5.7. ' \
+                'Please access `PointIdsArrayName` or `CellIdsArrayName` property instead.')
+
+    # In 5.7, we renamed the 3D View's ray tracing interface from OSPRay to RayTracing
+    if pname == "EnableOSPRay" and proxy.SMProxy.IsA("vtkSMRenderViewProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("EnableRayTracing")
+        else:
+            raise NotSupportedException(
+                'The `EnableOSPRay` control has been renamed in ParaView 5.7 to `EnableRayTracing`.')
+    if pname == "OSPRayRenderer" and proxy.SMProxy.IsA("vtkSMRenderViewProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("BackEnd")
+        else:
+            raise NotSupportedException(
+                'The `OSPRayRenderer` control has been renamed in ParaView 5.7 to `BackEnd` and '\
+                'the settings `scivis` and `pathtracer` have been renamed to `OSPRay scivis` '\
+                'and `OSPRay pathtracer` respectively.')
+    if pname == "OSPRayTemporalCacheSize" and proxy.SMProxy.IsA("vtkSMRenderViewProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("TemporalCacheSize")
+        else:
+            raise NotSupportedException(
+                'The `OSPRayTemporalCacheSize` control has been renamed in ParaView 5.7 to `TemporalCacheSize`.')
+    if pname == "OSPRayUseScaleArray" and proxy.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("UseScaleArray")
+        else:
+            raise NotSupportedException(
+                'The `OSPRayUseScaleArray` control has been renamed in ParaView 5.7 to `UseScaleArray`.')
+    if pname == "OSPRayScaleFunction" and proxy.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("ScaleFunction")
+        else:
+            raise NotSupportedException(
+                'The `OSPRayScaleFunction` control has been renamed in ParaView 5.7 to `ScaleFunction`.')
+    if pname == "OSPRayMaterial" and proxy.SMProxy.IsA("vtkSMRepresentationProxy"):
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("Material")
+        else:
+            raise NotSupportedException(
+                'The `OSPRayMaterial` control has been renamed in ParaView 5.7 to `Material`.')
+
+    #  In 5.7, the `Box` implicit function's Scale property was renamed to
+    #  Length.
+    if pname == "Scale" and proxy.SMProxy.GetXMLName() == "Box":
+        if paraview.compatibility.GetVersion() < 5.7:
+            return proxy.GetProperty("Length")
+        else:
+            raise NotSupportedException(
+                    'The `Scale` property has been renamed in ParaView 5.7 to `Length`.')
     raise Continue()
 
-def GetProxy(module, key):
+def GetProxy(module, key, **kwargs):
     version = paraview.compatibility.GetVersion()
     if version < 5.2:
         if key == "ResampleWithDataset":
-            return module.__dict__["LegacyResampleWithDataset"]()
+            return module.__dict__["LegacyResampleWithDataset"](**kwargs)
     if version < 5.3:
         if key == "PLYReader":
             # note the case. The old reader didn't support `FileNames` property,
             # only `FileName`.
-            return module.__dict__["plyreader"]()
+            return module.__dict__["plyreader"](**kwargs)
     if version < 5.5:
         if key == "Clip":
             # in PV 5.5 we changed the default for Clip's InsideOut property to 1 instead of 0
             # also InsideOut was changed to Invert in 5.5
-            clip = module.__dict__[key]()
+            clip = module.__dict__[key](**kwargs)
             clip.Invert = 0
             return clip
     if version < 5.6:
@@ -502,7 +685,53 @@ def GetProxy(module, key):
             # different set of properties. The previous implementation was renamed to
             # GlyphLegacy.
             print("Creating GlyphLegacy")
-            glyph = module.__dict__["GlyphLegacy"]()
+            glyph = module.__dict__["GlyphLegacy"](**kwargs)
             print(glyph)
             return glyph
-    return module.__dict__[key]()
+    if version < 5.6:
+        if key == "Glyph":
+            # In PV 5.6, we replaced the Glyph filter with a new implementation that has a
+            # different set of properties. The previous implementation was renamed to
+            # GlyphLegacy.
+            print("Creating GlyphLegacy")
+            glyph = module.__dict__["GlyphLegacy"](**kwargs)
+            print(glyph)
+            return glyph
+    if version < 5.7:
+        if key == "ExodusRestartReader" or key == "ExodusIIReader":
+            # in 5.7, we changed the names for blocks, this preserves old
+            # behavior
+            reader = module.__dict__[key](**kwargs)
+            reader.UseLegacyBlockNamesWithElementTypes = 1
+            return reader
+    return module.__dict__[key](**kwargs)
+
+def lookupTableUpdate(lutName):
+    """
+    Provide backwards compatibility for color lookup table name changes.
+    """
+    # For backwards compatibility
+    reverseLut = False
+    version = paraview.compatibility.GetVersion()
+    if (version <= 5.8):
+        # In 5.9, some redundant color maps were removed and some had name changes.
+        # Replace these with a color map that remains. Also handle some color map
+        # name changes.
+        reverse = ["Red to Blue Rainbow"]
+        if lutName in reverse:
+            reverseLut = True
+        nameChanges = {
+            "jet": "Jet",
+            "coolwarm": "Cool to Warm",
+            "Asymmtrical Earth Tones (6_21b)": "Asymmetrical Earth Tones (6_21b)",
+            "CIELab_blue2red": "CIELab Blue to Red",
+            "gray_Matlab": "Grayscale",
+            "rainbow": "Blue to Red Rainbow",
+            "Red to Blue Rainbow": "Blue to Red Rainbow"
+        }
+        try:
+            lutName = nameChanges[lutName]
+        except:
+            pass
+
+    return (lutName, reverseLut)

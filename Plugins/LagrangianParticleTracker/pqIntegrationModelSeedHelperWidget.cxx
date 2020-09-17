@@ -68,11 +68,6 @@ pqIntegrationModelSeedHelperWidget::pqIntegrationModelSeedHelperWidget(
 }
 
 //-----------------------------------------------------------------------------
-pqIntegrationModelSeedHelperWidget::~pqIntegrationModelSeedHelperWidget()
-{
-}
-
-//-----------------------------------------------------------------------------
 void pqIntegrationModelSeedHelperWidget::resetWidget()
 {
   this->resetSeedWidget(false);
@@ -97,7 +92,7 @@ void pqIntegrationModelSeedHelperWidget::resetSeedWidget(bool force)
     qDeleteAll(this->children());
 
     // Recover model array names and components
-    if (this->ModelPropertyValue != NULL)
+    if (this->ModelPropertyValue)
     {
       this->ModelPropertyValue->UpdatePropertyInformation();
       vtkSMStringVectorProperty* namesProp = vtkSMStringVectorProperty::SafeDownCast(
@@ -191,8 +186,8 @@ void pqIntegrationModelSeedHelperWidget::resetSeedWidget(bool force)
           vtkPVDataSetAttributesInformation* cellDataInfo =
             flowProxy->GetDataInformation()->GetAttributeInformation(
               vtkDataObject::FIELD_ASSOCIATION_CELLS);
-          QPixmap cellPixmap(":/pqWidgets/Icons/pqCellData16.png");
-          QPixmap pointPixmap(":/pqWidgets/Icons/pqPointData16.png");
+          QPixmap cellPixmap(":/pqWidgets/Icons/pqCellData.svg");
+          QPixmap pointPixmap(":/pqWidgets/Icons/pqPointData.svg");
 
           for (int ipd = 0; ipd < pointDataInfo->GetNumberOfArrays(); ipd++)
           {
@@ -219,7 +214,7 @@ void pqIntegrationModelSeedHelperWidget::resetSeedWidget(bool force)
         gridLayout->addWidget(gb, i, 0);
       }
     }
-    emit(this->arrayToGenerateChanged());
+    Q_EMIT(this->arrayToGenerateChanged());
   }
 }
 
@@ -300,7 +295,7 @@ void pqIntegrationModelSeedHelperWidget::setArrayToGenerate(const QList<QVariant
     // Recover array name
     QString arrayName = i->toString();
     int type = (i + 1)->toInt();
-    gb = NULL;
+    gb = nullptr;
     foreach (gb, gbs)
     {
       // Identify correct combo box
@@ -309,7 +304,7 @@ void pqIntegrationModelSeedHelperWidget::setArrayToGenerate(const QList<QVariant
         break;
       }
     }
-    if (gb == NULL)
+    if (!gb)
     {
       qCritical() << "Could not find group box with name" << arrayName;
       continue;

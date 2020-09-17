@@ -53,7 +53,12 @@ public:
   void setSaveDialogDefaultDirectory(const QString& dir);
   void setPythonManager(pqPythonManager* manager);
 
-public slots:
+  /*
+   * Scroll the editor to the bottom of the scroll area
+   */
+  void scrollToBottom();
+
+public Q_SLOTS:
 
   void open(const QString& filename);
   void setText(const QString& text);
@@ -63,13 +68,13 @@ public slots:
   // be created and this method returns false.
   bool newFile();
 
-signals:
+Q_SIGNALS:
   void fileSaved();
 
 protected:
   void closeEvent(QCloseEvent* event) override;
 
-private slots:
+private Q_SLOTS:
   void open();
   bool save();
   bool saveAs();

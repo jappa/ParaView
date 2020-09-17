@@ -69,7 +69,15 @@ pqPythonSyntaxHighlighter::pqPythonSyntaxHighlighter(QTextEdit* textEdit, QObjec
 
   {
     vtkPythonScopeGilEnsurer gilEnsurer;
+
+    // PyErr_Fetch() -- PyErr_Restore() helps us catch import related exceptions
+    // thus avoiding printing any messages to the terminal if the `pygments`
+    // import fails. `pygments` is totally optional for ParaView.
+    PyObject *type, *value, *traceback;
+    PyErr_Fetch(&type, &value, &traceback);
     this->Internals->PygmentsModule.TakeReference(PyImport_ImportModule("pygments"));
+    PyErr_Restore(type, value, traceback);
+
     if (this->Internals->PygmentsModule && this->Internals->TextEdit != NULL)
     {
       this->Internals->HighlightFunction.TakeReference(
@@ -116,7 +124,13 @@ pqPythonSyntaxHighlighter::pqPythonSyntaxHighlighter(QTextEdit* textEdit, QObjec
   this->Internals->TextEdit->setFont(font);
   // Set tab width equal to 4 spaces
   QFontMetrics metrics = this->Internals->TextEdit->fontMetrics();
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 11, 0))
+  this->Internals->TextEdit->setTabStopDistance(metrics.horizontalAdvance("    "));
+#elif (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+  this->Internals->TextEdit->setTabStopDistance(metrics.width("    "));
+#else
   this->Internals->TextEdit->setTabStopWidth(metrics.width("    "));
+#endif
   this->rehighlightSyntax();
 }
 

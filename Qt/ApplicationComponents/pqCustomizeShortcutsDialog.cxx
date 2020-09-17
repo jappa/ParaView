@@ -137,7 +137,14 @@ class pqCustomizeShortcutsModel : public QAbstractItemModel
       QString settingsKey = QString("%1/%2").arg(settings.group()).arg(localSettingName);
       if (action->menu())
       {
-        if (actionName != "Recent Files" && actionName != "Filters" && actionName != "Sources" &&
+        if ((root->name() == "Filters" || root->name() == "Sources") &&
+          actionName != "Alphabetical")
+        {
+          // All filters are under alphabetical, but the actions are also in the
+          // category menus. Ignore all but the alphabetical category to avoid duplicates.
+          continue;
+        }
+        if (actionName != "Recent_Files" &&
           (!(root->name() == "Macros" && (actionName == "Edit..." || actionName == "Delete..."))))
         {
           TreeItem* myItem = new TreeItem(actionName, settingsKey, false, action, root);
@@ -311,7 +318,7 @@ public:
       item->setKeySequence(shortcut);
       QVector<int> roles;
       roles << Qt::DisplayRole;
-      emit dataChanged(idx, idx, roles);
+      Q_EMIT dataChanged(idx, idx, roles);
     }
   }
 

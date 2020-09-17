@@ -33,6 +33,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // self includes
 #include "pqColorChooserButton.h"
 
+#include "cassert"
+
 // Qt includes
 #include <QColorDialog>
 #include <QPainter>
@@ -91,7 +93,7 @@ void pqColorChooserButton::setChosenColor(const QColor& color)
 //-----------------------------------------------------------------------------
 void pqColorChooserButton::setChosenColorRgbF(const QVariantList& val)
 {
-  Q_ASSERT(val.size() == 3);
+  assert(val.size() == 3);
   QColor color;
   color.setRgbF(val[0].toDouble(), val[1].toDouble(), val[2].toDouble());
 
@@ -105,17 +107,17 @@ void pqColorChooserButton::setChosenColorRgbF(const QVariantList& val)
       this->Color[2] = val[2].toDouble();
 
       this->setIcon(this->renderColorSwatch(color));
-      emit this->chosenColorChanged(color);
+      Q_EMIT this->chosenColorChanged(color);
     }
 
-    emit this->validColorChosen(color);
+    Q_EMIT this->validColorChosen(color);
   }
 }
 
 //-----------------------------------------------------------------------------
 void pqColorChooserButton::setChosenColorRgbaF(const QVariantList& val)
 {
-  Q_ASSERT(val.size() == 4);
+  assert(val.size() == 4);
   QColor color;
   color.setRgbF(val[0].toDouble(), val[1].toDouble(), val[2].toDouble(), val[3].toDouble());
 
@@ -130,9 +132,9 @@ void pqColorChooserButton::setChosenColorRgbaF(const QVariantList& val)
       this->Color[3] = val[3].toDouble();
 
       this->setIcon(this->renderColorSwatch(color));
-      emit this->chosenColorChanged(color);
+      Q_EMIT this->chosenColorChanged(color);
     }
-    emit this->validColorChosen(color);
+    Q_EMIT this->validColorChosen(color);
   }
 }
 
@@ -153,7 +155,21 @@ QIcon pqColorChooserButton::renderColorSwatch(const QColor& color)
   painter.setBrush(QBrush(color));
   painter.drawEllipse(1, 1, radius - 2, radius - 2);
   painter.end();
-  return QIcon(pix);
+  QIcon ret(pix);
+
+  QPixmap pix2x(radius * 2, radius * 2);
+  // Add a high-dpi version, just like a @2x.png file
+  pix2x.setDevicePixelRatio(2.0);
+  pix2x.fill(QColor(0, 0, 0, 0));
+
+  QPainter painter2x(&pix2x);
+  painter2x.setRenderHint(QPainter::Antialiasing, true);
+  painter2x.setBrush(QBrush(color));
+  painter2x.drawEllipse(2, 2, radius - 4, radius - 4);
+  painter2x.end();
+
+  ret.addPixmap(pix2x);
+  return ret;
 }
 
 //-----------------------------------------------------------------------------
